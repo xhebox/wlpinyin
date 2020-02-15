@@ -142,7 +142,7 @@ static void im_panel_update(struct wlpinyin_state *state) {
 		aux = im_buffer_get(state, false);
 	}
 
-	wlpinyin_dbg("aux[%d]: %s", strlen(aux), aux);
+	wlpinyin_dbg("aux[%ld]: %s", strlen(aux), aux);
 	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "%s = ", aux);
 	for (int i = 0; i < state->im_candidate_page; i++) {
 		wlpinyin_dbg("cand[%d]: %s", i + 1, state->im_cand_text[i]);
