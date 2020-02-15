@@ -36,6 +36,7 @@ struct wlpinyin_state {
 	bool im_activate;
 	bool im_forwarding;
 	bool im_exit;
+	bool im_only_modifier;
 
 	uint32_t im_serial;
 	uint32_t im_mods;

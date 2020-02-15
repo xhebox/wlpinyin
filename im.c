@@ -262,6 +262,8 @@ static void handle_modifiers(
 	zwp_virtual_keyboard_v1_modifiers(state->virtual_keyboard, mods_depressed,
 																		mods_latched, mods_locked, group);
 	state->im_mods = mods_depressed | mods_latched;
+	if (state->im_mods != 0)
+		state->im_only_modifier = true;
 	im_notify(state);
 }
 
@@ -611,15 +613,22 @@ void im_handle(struct wlpinyin_state *state) {
 		wl_list_remove(&keynode->link);
 
 		if (keynode->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-			// TOGGLE LANGUAGE
-			if (!handled && keysym == XKB_KEY_Control_L) {
-				if (state->im_forwarding) {
-					state->im_forwarding = false;
-				} else {
-					state->im_forwarding = true;
-					im_deactivate_engine(state);
-				}
-				handled = true;
+			switch (keysym) {
+			case XKB_KEY_Control_L:
+			case XKB_KEY_Control_R:
+			case XKB_KEY_Shift_L:
+			case XKB_KEY_Shift_R:
+			case XKB_KEY_Alt_L:
+			case XKB_KEY_Alt_R:
+			case XKB_KEY_Meta_L:
+			case XKB_KEY_Meta_R:
+			case XKB_KEY_Hyper_L:
+			case XKB_KEY_Hyper_R:
+			case XKB_KEY_Shift_Lock:
+			case XKB_KEY_Caps_Lock:
+				break;
+			default:
+				state->im_only_modifier = false;
 			}
 
 			if (!handled) {
@@ -657,6 +666,16 @@ void im_handle(struct wlpinyin_state *state) {
 					break;
 				}
 			}
+
+			if (state->im_only_modifier && keysym == XKB_KEY_Control_L) {
+				if (state->im_forwarding) {
+					state->im_forwarding = false;
+				} else {
+					state->im_forwarding = true;
+					im_deactivate_engine(state);
+				}
+			}
+
 			free(keynode);
 		}
 	}
