@@ -125,7 +125,7 @@ static void im_auxcand_update(struct wlpinyin_state *state) {
 
 	im_engine_parse(state->engine, state->im_buf);
 
-	state->im_aux_text = im_engine_aux_get(state->engine, state->im_buf);
+	state->im_aux_text = im_engine_aux_get(state->engine, state->im_bufpos);
 
 	for (int i = 0; i < state->im_candidate_page; i++) {
 		state->im_cand_text[i] =

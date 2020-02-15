@@ -88,7 +88,7 @@ void im_destroy(struct wlpinyin_state *state);
 void *im_engine_new();
 void im_engine_free(void *);
 
-const char *im_engine_aux_get(void *, const char*);
+const char *im_engine_aux_get(void *, int cursor);
 void im_engine_aux_free(void *, const char *);
 void im_engine_parse(void *, const char*);
 const char *im_engine_candidate_get(void *, int);

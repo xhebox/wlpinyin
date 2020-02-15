@@ -1,5 +1,7 @@
 project('wlpinyin',['c'])
 
+add_global_arguments(['-Wall'], language : 'c')
+
 wl_client = dependency('wayland-client')
 wl_protocols = dependency('wayland-protocols')
 pinyin = dependency('libpinyin')

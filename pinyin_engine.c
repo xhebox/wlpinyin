@@ -90,13 +90,13 @@ void im_engine_deactivate(void *_engine) {
 	}
 }
 
-const char *im_engine_aux_get(void *_engine, const char *text) {
+const char *im_engine_aux_get(void *_engine, int cursor) {
 	pinyin_engine *engine = _engine;
 	if (engine == NULL || !engine->running)
 		return NULL;
 
 	gchar *aux_text = NULL;
-	pinyin_get_double_pinyin_auxiliary_text(engine->instance, text, &aux_text);
+	pinyin_get_double_pinyin_auxiliary_text(engine->instance, cursor, &aux_text);
 	return aux_text;
 }
 
