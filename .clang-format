@@ -1,0 +1,13 @@
+﻿---
+BasedOnStyle: Chromium
+AlwaysBreakTemplateDeclarations: 'false'
+IndentCaseLabels: 'false'
+NamespaceIndentation: Inner
+PointerAlignment: Right
+SpaceBeforeAssignmentOperators: 'true'
+SpacesInParentheses: 'false'
+Standard: Cpp11
+TabWidth: '2'
+UseTab: Always
+
+...
