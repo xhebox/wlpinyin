@@ -110,7 +110,7 @@ static void im_candidate_choose(struct wlpinyin_state *state, int index) {
 }
 
 static bool im_should_deactivate_engine(struct wlpinyin_state *state) {
-	return state->im_buflen <= 0;
+	return im_engine_activated(state->engine) && state->im_buflen <= 0;
 }
 
 static const char *im_buffer_get(struct wlpinyin_state *state, bool clr) {
