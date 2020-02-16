@@ -123,7 +123,10 @@ static const char *im_buffer_get(struct wlpinyin_state *state, bool clr) {
 static void im_auxcand_update(struct wlpinyin_state *state) {
 	im_text_free(state);
 
-	im_engine_parse(state->engine, state->im_buf);
+	im_engine_parse(state->engine, state->im_buf,
+									state->im_prefix && (strlen(state->im_prefix) > 0)
+											? state->im_prefix
+											: "");
 
 	state->im_aux_text = im_engine_aux_get(state->engine, state->im_bufpos);
 
@@ -179,6 +182,16 @@ static void im_deactivate_engine(struct wlpinyin_state *state) {
 	im_send_text(state, NULL);
 	im_send_preedit(state, NULL);
 	im_text_free(state);
+}
+
+static void handle_surrounding(void *data,
+															 struct zwp_input_method_v2 *zwp_input_method_v2,
+															 const char *text,
+															 uint32_t cursor,
+															 uint32_t anchor) {
+	UNUSED(zwp_input_method_v2);
+	struct wlpinyin_state *state = data;
+	state->im_prefix = text;
 }
 
 static void handle_keymap(
@@ -412,7 +425,7 @@ void im_setup(struct wlpinyin_state *state) {
 	static const struct zwp_input_method_v2_listener im_listener = {
 			.activate = handle_activate,
 			.deactivate = handle_deactivate,
-			.surrounding_text = noop,
+			.surrounding_text = handle_surrounding,
 			.text_change_cause = noop,
 			.content_type = noop,
 			.done = handle_done,

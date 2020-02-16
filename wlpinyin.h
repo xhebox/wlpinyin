@@ -52,6 +52,7 @@ struct wlpinyin_state {
 	const char *im_aux_text;
 	const char *im_cand_text[9];
 
+	const char *im_prefix;
 	char *im_buf;
 	size_t im_buflen;
 	size_t im_bufcap;
@@ -91,7 +92,7 @@ void im_engine_free(void *);
 
 const char *im_engine_aux_get(void *, int cursor);
 void im_engine_aux_free(void *, const char *);
-void im_engine_parse(void *, const char*);
+void im_engine_parse(void *, const char *, const char*);
 const char *im_engine_candidate_get(void *, int);
 void im_engine_candidate_free(void *, const char *);
 size_t im_engine_candidate_choose(void *, int);
