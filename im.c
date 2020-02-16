@@ -297,6 +297,9 @@ static void im_activate(struct wlpinyin_state *state) {
 
 	state->im_candidate_num = 0;
 	state->im_forwarding = true;
+
+	struct itimerspec timer = {};
+	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
 }
 
 static void im_deactivate(struct wlpinyin_state *state) {
