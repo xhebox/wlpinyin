@@ -52,7 +52,7 @@ struct wlpinyin_state {
 	const char *im_aux_text;
 	const char *im_cand_text[9];
 
-	const char *im_prefix;
+	char *im_prefix;
 	char *im_buf;
 	size_t im_buflen;
 	size_t im_bufcap;

@@ -191,7 +191,12 @@ static void handle_surrounding(void *data,
 															 uint32_t anchor) {
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
-	state->im_prefix = text;
+	if (state->im_prefix != NULL)
+		free((void *)state->im_prefix);
+
+	state->im_prefix = strdup(text);
+	state->im_prefix[cursor] = 0;
+	wlpinyin_dbg("surround: %d,%d, %s", cursor, anchor, text);
 }
 
 static void handle_keymap(
@@ -708,6 +713,9 @@ void im_handle(struct wlpinyin_state *state) {
 }
 
 void im_destroy(struct wlpinyin_state *state) {
+	if (state->im_prefix != NULL)
+		free(state->im_prefix);
+
 	if (state->im_buf != NULL) {
 		free(state->im_buf);
 	}

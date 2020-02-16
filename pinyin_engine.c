@@ -3,7 +3,7 @@
 #include "wlpinyin.h"
 
 #define PINYIN_DATA_SYSTEM "/lib/libpinyin/data"
-#define PINYIN_DATA_USER "~/.config/pinyin"
+#define PINYIN_DATA_USER "/home/xhe/.config/pinyin"
 
 typedef struct pinyin_engine {
 	pinyin_context_t *context;
@@ -86,6 +86,7 @@ void im_engine_deactivate(void *_engine) {
 
 	if (engine->running) {
 		engine->running = false;
+		//pinyin_remember_user_input(engine->instance, , -1);
 		pinyin_save(engine->context);
 	}
 }
