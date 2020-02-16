@@ -421,6 +421,13 @@ int im_repeat_timerfd(struct wlpinyin_state *state) {
 }
 
 void im_repeat(struct wlpinyin_state *state, uint64_t times) {
+	struct itimerspec timer = {};
+	timerfd_gettime(state->im_repeat_timer, &timer);
+
+	if (timer.it_value.tv_nsec == 0 && timer.it_value.tv_sec == 0) {
+		return;
+	}
+
 	for (uint64_t i = 0; i < times; i++) {
 		zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
 																state->im_repeat_key,
