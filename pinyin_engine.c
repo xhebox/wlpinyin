@@ -86,7 +86,6 @@ void im_engine_deactivate(void *_engine) {
 
 	if (engine->running) {
 		engine->running = false;
-		pinyin_train(engine->instance, 0);
 		pinyin_save(engine->context);
 	}
 }
