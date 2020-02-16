@@ -48,6 +48,18 @@ static void im_send_preedit(struct wlpinyin_state *state, const char *text) {
 }
 
 static void im_send_text(struct wlpinyin_state *state, const char *text) {
+	if (text != NULL) {
+		size_t len = strlen(text);
+		if (state->im_sbuflen + len > state->im_sbufcap) {
+			state->im_sbufcap += 1024;
+			state->im_sbuf = realloc(state->im_sbuf, state->im_sbufcap);
+			if (state->im_sbuf == NULL) {
+				return im_exit(state);
+			}
+		}
+		strcpy(&state->im_sbuf[state->im_sbuflen], text);
+		state->im_sbuflen += len;
+	}
 	zwp_input_method_v2_commit_string(state->input_method, text ? text : "");
 	zwp_input_method_v2_commit(state->input_method, state->im_serial++);
 }
@@ -110,7 +122,12 @@ static void im_candidate_choose(struct wlpinyin_state *state, int index) {
 }
 
 static bool im_should_deactivate_engine(struct wlpinyin_state *state) {
-	return im_engine_activated(state->engine) && state->im_buflen <= 0;
+	bool r = im_engine_activated(state->engine) && state->im_buflen <= 0;
+	if (r && state->im_sbuflen > 0) {
+		wlpinyin_dbg("remember text: %s", state->im_sbuf);
+		im_engine_remember(state->engine, state->im_sbuf);
+	}
+	return r;
 }
 
 static const char *im_buffer_get(struct wlpinyin_state *state, bool clr) {
@@ -167,6 +184,7 @@ static void im_activate_engine(struct wlpinyin_state *state) {
 				 i++) {
 			state->im_cand_text[i] = NULL;
 		}
+		state->im_sbuflen = 0;
 		state->im_buflen = 0;
 		state->im_bufpos = 0;
 		state->im_buf[state->im_buflen] = 0;
@@ -375,6 +393,14 @@ static void handle_done(void *data,
 }
 
 void im_setup(struct wlpinyin_state *state) {
+	state->im_sbufcap = 1024;
+
+	state->im_sbuf = malloc(state->im_sbufcap);
+	if (state->im_sbuf == NULL) {
+		wlpinyin_err("failed to alloc buffer");
+		exit(EXIT_FAILURE);
+	}
+
 	state->im_bufcap = 1024;
 
 	state->im_buf = malloc(state->im_bufcap);
@@ -715,6 +741,10 @@ void im_handle(struct wlpinyin_state *state) {
 void im_destroy(struct wlpinyin_state *state) {
 	if (state->im_prefix != NULL)
 		free(state->im_prefix);
+
+	if (state->im_sbuf != NULL) {
+		free(state->im_sbuf);
+	}
 
 	if (state->im_buf != NULL) {
 		free(state->im_buf);

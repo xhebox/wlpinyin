@@ -53,6 +53,9 @@ struct wlpinyin_state {
 	const char *im_cand_text[9];
 
 	char *im_prefix;
+	char *im_sbuf;
+	size_t im_sbuflen;
+	size_t im_sbufcap;
 	char *im_buf;
 	size_t im_buflen;
 	size_t im_bufcap;
@@ -90,12 +93,13 @@ void im_destroy(struct wlpinyin_state *state);
 void *im_engine_new();
 void im_engine_free(void *);
 
+void im_engine_parse(void *, const char *, const char*);
 const char *im_engine_aux_get(void *, int cursor);
 void im_engine_aux_free(void *, const char *);
-void im_engine_parse(void *, const char *, const char*);
 const char *im_engine_candidate_get(void *, int);
 void im_engine_candidate_free(void *, const char *);
 size_t im_engine_candidate_choose(void *, int);
+void im_engine_remember(void *, const char *);
 
 // maybe called even engined is started
 void im_engine_activate(void *);

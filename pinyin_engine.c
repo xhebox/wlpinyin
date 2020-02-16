@@ -86,7 +86,7 @@ void im_engine_deactivate(void *_engine) {
 
 	if (engine->running) {
 		engine->running = false;
-		//pinyin_remember_user_input(engine->instance, , -1);
+		pinyin_train(engine->instance, 0);
 		pinyin_save(engine->context);
 	}
 }
@@ -113,8 +113,6 @@ void im_engine_parse(void *_engine, const char *text, const char *prefix) {
 	pinyin_engine *engine = _engine;
 	if (engine == NULL || !engine->running)
 		return;
-
-	pinyin_reset(engine->instance);
 
 	pinyin_parse_more_double_pinyins(engine->instance, text);
 
@@ -164,14 +162,13 @@ size_t im_engine_candidate_choose(void *_engine, int index) {
 	if (candidate == NULL)
 		return 0;
 
-	size_t r = pinyin_choose_candidate(engine->instance, 0, candidate);
+	return pinyin_choose_candidate(engine->instance, 0, candidate);
+}
 
-	lookup_candidate_type_t type;
-	pinyin_get_candidate_type(engine->instance, candidate, &type);
-	if (type == NBEST_MATCH_CANDIDATE) {
-		guint8 nbest = 0;
-		pinyin_get_candidate_nbest_index(engine->instance, candidate, &nbest);
-		pinyin_train(engine->instance, nbest);
-	}
-	return r;
+void im_engine_remember(void *_engine, const char *text) {
+	pinyin_engine *engine = _engine;
+	if (engine == NULL)
+		return;
+
+	pinyin_remember_user_input(engine->instance, text, -1);
 }
