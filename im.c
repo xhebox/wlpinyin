@@ -305,6 +305,14 @@ static void im_activate(struct wlpinyin_state *state) {
 static void im_deactivate(struct wlpinyin_state *state) {
 	state->im_forwarding = true;
 
+	struct wlpinyin_key *keynode2 = NULL, *tmp2 = NULL;
+	wl_list_for_each_safe(keynode2, tmp2, &state->im_unreleased_keys, link) {
+		zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
+																keynode2->key, WL_KEYBOARD_KEY_STATE_RELEASED);
+		wl_list_remove(&keynode2->link);
+		free(keynode2);
+	}
+
 	struct itimerspec timer = {};
 	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
 
@@ -444,13 +452,6 @@ void im_repeat(struct wlpinyin_state *state, uint64_t times) {
 
 void im_exit(struct wlpinyin_state *state) {
 	im_deactivate(state);
-	struct wlpinyin_key *keynode2 = NULL, *tmp2 = NULL;
-	wl_list_for_each_safe(keynode2, tmp2, &state->im_unreleased_keys, link) {
-		zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
-																keynode2->key, WL_KEYBOARD_KEY_STATE_RELEASED);
-		wl_list_remove(&keynode2->link);
-		free(keynode2);
-	}
 	state->im_exit = true;
 	im_notify(state);
 }
