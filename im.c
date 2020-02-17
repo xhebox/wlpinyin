@@ -44,25 +44,23 @@ static void im_text_free(struct wlpinyin_state *state) {
 static void im_send_preedit(struct wlpinyin_state *state, const char *text) {
 	zwp_input_method_v2_set_preedit_string(state->input_method, text, 0, 0);
 	zwp_input_method_v2_commit(state->input_method, state->im_serial);
+	wl_display_roundtrip(state->display);
 }
 
 static void im_send_text(struct wlpinyin_state *state, const char *text) {
-	im_send_preedit(state, "");
-
 	size_t len = strlen(text);
-	if (len > 0) {
-		if (state->im_sbuflen + len > state->im_sbufcap) {
-			state->im_sbufcap += 1024;
-			state->im_sbuf = realloc(state->im_sbuf, state->im_sbufcap);
-			if (state->im_sbuf == NULL) {
-				return im_exit(state);
-			}
+	if (state->im_sbuflen + len > state->im_sbufcap) {
+		state->im_sbufcap += 1024;
+		state->im_sbuf = realloc(state->im_sbuf, state->im_sbufcap);
+		if (state->im_sbuf == NULL) {
+			return im_exit(state);
 		}
-		strcpy(&state->im_sbuf[state->im_sbuflen], text);
-		state->im_sbuflen += len;
-		zwp_input_method_v2_commit_string(state->input_method, text);
-		zwp_input_method_v2_commit(state->input_method, state->im_serial);
 	}
+	strcpy(&state->im_sbuf[state->im_sbuflen], text);
+	state->im_sbuflen += len;
+	zwp_input_method_v2_commit_string(state->input_method, text);
+	zwp_input_method_v2_commit(state->input_method, state->im_serial);
+	wl_display_roundtrip(state->display);
 }
 
 static void im_buffer_key(struct wlpinyin_state *state, uint32_t key) {
