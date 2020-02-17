@@ -591,6 +591,10 @@ void im_handle(struct wlpinyin_state *state) {
 			}
 
 			switch (keysym) {
+			case XKB_KEY_Caps_Lock:
+				state->im_forwarding = true;
+				im_engine_deactivate(state->engine);
+				break;
 			case XKB_KEY_c:
 			case XKB_KEY_z:
 			case XKB_KEY_C:
