@@ -139,10 +139,14 @@ static const char *im_buffer_get(struct wlpinyin_state *state, bool clr) {
 static void im_auxcand_update(struct wlpinyin_state *state) {
 	im_text_free(state);
 
+	if (state->im_prefix) {
+		if (strlen(state->im_prefix) > 32) {
+			state->im_prefix[32] = 0;
+		}
+	}
+
 	im_engine_parse(state->engine, state->im_buf,
-									state->im_prefix && (strlen(state->im_prefix) > 0)
-											? state->im_prefix
-											: "");
+									state->im_prefix ? state->im_prefix : "");
 
 	state->im_aux_text = im_engine_aux_get(state->engine, state->im_bufpos);
 
