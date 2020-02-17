@@ -48,6 +48,7 @@ static void im_send_preedit(struct wlpinyin_state *state, const char *text) {
 }
 
 static void im_send_text(struct wlpinyin_state *state, const char *text) {
+	im_send_preedit(state, "");
 	if (text != NULL) {
 		size_t len = strlen(text);
 		if (state->im_sbuflen + len > state->im_sbufcap) {
