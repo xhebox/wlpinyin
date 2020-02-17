@@ -42,15 +42,15 @@ static void im_text_free(struct wlpinyin_state *state) {
 }
 
 static void im_send_preedit(struct wlpinyin_state *state, const char *text) {
-	zwp_input_method_v2_set_preedit_string(state->input_method, text ? text : "",
-																				 0, 0);
-	zwp_input_method_v2_commit(state->input_method, state->im_serial++);
+	zwp_input_method_v2_set_preedit_string(state->input_method, text, 0, 0);
+	zwp_input_method_v2_commit(state->input_method, state->im_serial);
 }
 
 static void im_send_text(struct wlpinyin_state *state, const char *text) {
 	im_send_preedit(state, "");
-	if (text != NULL) {
-		size_t len = strlen(text);
+
+	size_t len = strlen(text);
+	if (len > 0) {
 		if (state->im_sbuflen + len > state->im_sbufcap) {
 			state->im_sbufcap += 1024;
 			state->im_sbuf = realloc(state->im_sbuf, state->im_sbufcap);
@@ -60,9 +60,9 @@ static void im_send_text(struct wlpinyin_state *state, const char *text) {
 		}
 		strcpy(&state->im_sbuf[state->im_sbuflen], text);
 		state->im_sbuflen += len;
+		zwp_input_method_v2_commit_string(state->input_method, text);
+		zwp_input_method_v2_commit(state->input_method, state->im_serial);
 	}
-	zwp_input_method_v2_commit_string(state->input_method, text ? text : "");
-	zwp_input_method_v2_commit(state->input_method, state->im_serial++);
 }
 
 static void im_buffer_key(struct wlpinyin_state *state, uint32_t key) {
@@ -151,6 +151,12 @@ static void im_auxcand_update(struct wlpinyin_state *state) {
 	for (int i = 0; i < state->im_candidate_page; i++) {
 		state->im_cand_text[i] =
 				im_engine_candidate_get(state->engine, state->im_candidate_num + i);
+		if (i == 0 && state->im_cand_text[i] == NULL) {
+			if (state->im_candidate_num > state->im_candidate_page) {
+				state->im_candidate_num -= state->im_candidate_page;
+				i = -1;
+			}
+		}
 	}
 }
 
@@ -190,16 +196,14 @@ static void im_activate_engine(struct wlpinyin_state *state) {
 		state->im_bufpos = 0;
 		state->im_buf[state->im_buflen] = 0;
 		state->im_candidate_num = 0;
-		im_send_text(state, NULL);
-		im_send_preedit(state, NULL);
+		im_send_text(state, "");
 		im_engine_activate(state->engine);
 	}
 }
 
 static void im_deactivate_engine(struct wlpinyin_state *state) {
+	im_send_text(state, "");
 	im_engine_deactivate(state->engine);
-	im_send_text(state, NULL);
-	im_send_preedit(state, NULL);
 	im_text_free(state);
 }
 
@@ -266,8 +270,13 @@ static void handle_key(
 		uint32_t key,
 		uint32_t kstate) {
 	UNUSED(zwp_input_method_keyboard_grab_v2);
+#ifndef NDEBUG
 	struct wlpinyin_state *state = data;
-	wlpinyin_dbg("key %d, %d, %d, %d", serial, time, key, kstate);
+	char buf[512] = {};
+	xkb_keysym_t keysym = xkb_state_key_get_one_sym(state->xkb_state, key + 8);
+	xkb_keysym_get_name(keysym, buf, sizeof buf);
+	wlpinyin_dbg("key %d, %d, %s, %d", serial, time, buf, kstate);
+#endif
 
 	struct itimerspec timer = {};
 	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
@@ -390,6 +399,7 @@ static void handle_done(void *data,
 												struct zwp_input_method_v2 *zwp_input_method_v2) {
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
+	state->im_serial++;
 	im_notify(state);
 }
 
@@ -552,6 +562,11 @@ void im_handle(struct wlpinyin_state *state) {
 					im_send_text(state, state->im_cand_text[0]);
 					handled = true;
 					break;
+				case XKB_KEY_Escape:
+					im_send_text(state, "");
+					im_engine_deactivate(state->engine);
+					handled = true;
+					break;
 				case XKB_KEY_Return:
 					im_send_text(state, im_buffer_get(state, true));
 					handled = true;
@@ -578,6 +593,8 @@ void im_handle(struct wlpinyin_state *state) {
 				case XKB_KEY_minus:
 				case XKB_KEY_KP_Subtract:
 					state->im_candidate_num -= state->im_candidate_page;
+					if (state->im_candidate_num < 0)
+						state->im_candidate_num = 0;
 					handled = true;
 					break;
 				case XKB_KEY_Delete:
@@ -591,83 +608,85 @@ void im_handle(struct wlpinyin_state *state) {
 				}
 			}
 
-			switch (keysym) {
-			case XKB_KEY_Caps_Lock:
-				state->im_forwarding = true;
-				im_engine_deactivate(state->engine);
-				break;
-			case XKB_KEY_c:
-			case XKB_KEY_z:
-			case XKB_KEY_C:
-			case XKB_KEY_Z:
-				if (state->im_mods & (1 << state->xkb_mods_index[wlpinyin_ctrl])) {
+			if (!handled) {
+				switch (keysym) {
+				case XKB_KEY_Caps_Lock:
+					state->im_forwarding = true;
 					im_engine_deactivate(state->engine);
-					im_exit(state);
+					break;
+				case XKB_KEY_c:
+				case XKB_KEY_z:
+				case XKB_KEY_C:
+				case XKB_KEY_Z:
+					if (state->im_mods & (1 << state->xkb_mods_index[wlpinyin_ctrl])) {
+						im_engine_deactivate(state->engine);
+						im_exit(state);
+						handled = true;
+						break;
+					}
+				case XKB_KEY_a:
+				case XKB_KEY_b:
+				case XKB_KEY_d:
+				case XKB_KEY_e:
+				case XKB_KEY_f:
+				case XKB_KEY_g:
+				case XKB_KEY_h:
+				case XKB_KEY_i:
+				case XKB_KEY_j:
+				case XKB_KEY_k:
+				case XKB_KEY_l:
+				case XKB_KEY_m:
+				case XKB_KEY_n:
+				case XKB_KEY_o:
+				case XKB_KEY_p:
+				case XKB_KEY_q:
+				case XKB_KEY_r:
+				case XKB_KEY_s:
+				case XKB_KEY_t:
+				case XKB_KEY_u:
+				case XKB_KEY_v:
+				case XKB_KEY_w:
+				case XKB_KEY_x:
+				case XKB_KEY_y:
+				case XKB_KEY_A:
+				case XKB_KEY_B:
+				case XKB_KEY_D:
+				case XKB_KEY_E:
+				case XKB_KEY_F:
+				case XKB_KEY_G:
+				case XKB_KEY_H:
+				case XKB_KEY_I:
+				case XKB_KEY_J:
+				case XKB_KEY_K:
+				case XKB_KEY_L:
+				case XKB_KEY_M:
+				case XKB_KEY_N:
+				case XKB_KEY_O:
+				case XKB_KEY_P:
+				case XKB_KEY_Q:
+				case XKB_KEY_R:
+				case XKB_KEY_S:
+				case XKB_KEY_T:
+				case XKB_KEY_U:
+				case XKB_KEY_V:
+				case XKB_KEY_W:
+				case XKB_KEY_X:
+				case XKB_KEY_Y:
+					im_activate_engine(state);
+					im_buffer_key(state, xkb_keysym_to_utf32(keysym));
 					handled = true;
 					break;
 				}
-			case XKB_KEY_a:
-			case XKB_KEY_b:
-			case XKB_KEY_d:
-			case XKB_KEY_e:
-			case XKB_KEY_f:
-			case XKB_KEY_g:
-			case XKB_KEY_h:
-			case XKB_KEY_i:
-			case XKB_KEY_j:
-			case XKB_KEY_k:
-			case XKB_KEY_l:
-			case XKB_KEY_m:
-			case XKB_KEY_n:
-			case XKB_KEY_o:
-			case XKB_KEY_p:
-			case XKB_KEY_q:
-			case XKB_KEY_r:
-			case XKB_KEY_s:
-			case XKB_KEY_t:
-			case XKB_KEY_u:
-			case XKB_KEY_v:
-			case XKB_KEY_w:
-			case XKB_KEY_x:
-			case XKB_KEY_y:
-			case XKB_KEY_A:
-			case XKB_KEY_B:
-			case XKB_KEY_D:
-			case XKB_KEY_E:
-			case XKB_KEY_F:
-			case XKB_KEY_G:
-			case XKB_KEY_H:
-			case XKB_KEY_I:
-			case XKB_KEY_J:
-			case XKB_KEY_K:
-			case XKB_KEY_L:
-			case XKB_KEY_M:
-			case XKB_KEY_N:
-			case XKB_KEY_O:
-			case XKB_KEY_P:
-			case XKB_KEY_Q:
-			case XKB_KEY_R:
-			case XKB_KEY_S:
-			case XKB_KEY_T:
-			case XKB_KEY_U:
-			case XKB_KEY_V:
-			case XKB_KEY_W:
-			case XKB_KEY_X:
-			case XKB_KEY_Y:
-				im_activate_engine(state);
-				im_buffer_key(state, xkb_keysym_to_utf32(keysym));
-				handled = true;
-				break;
 			}
-		}
 
-		if (im_should_deactivate_engine(state)) {
-			im_deactivate_engine(state);
-		}
+			if (im_should_deactivate_engine(state)) {
+				im_deactivate_engine(state);
+			}
 
-		if (im_engine_activated(state->engine)) {
-			im_auxcand_update(state);
-			im_panel_update(state);
+			if (handled && im_engine_activated(state->engine)) {
+				im_auxcand_update(state);
+				im_panel_update(state);
+			}
 		}
 
 		wl_list_remove(&keynode->link);

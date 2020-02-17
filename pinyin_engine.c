@@ -52,7 +52,6 @@ void im_engine_free(void *_engine) {
 		pinyin_free_instance(engine->instance);
 
 	if (engine->context != NULL) {
-		pinyin_mask_out(engine->context, 0, 0);
 		pinyin_save(engine->context);
 		pinyin_fini(engine->context);
 	}
