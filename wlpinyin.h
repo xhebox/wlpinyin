@@ -12,14 +12,12 @@
 #include "text-input-unstable-v3-client-protocol.h"
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 
-enum wlpinyin_modifier {
-	wlpinyin_alt = 0,
-	wlpinyin_ctrl,
-	wlpinyin_shift,
-	wlpinyin_caps,
-	wlpinyin_win,
-	wlpinyin_num,
-	wlpinyin_mod_max,
+struct engine;
+
+struct wlpinyin_key {
+	xkb_keysym_t keysym;
+	uint32_t keycode;
+	bool pressed;
 };
 
 struct wlpinyin_state {
@@ -41,32 +39,21 @@ struct wlpinyin_state {
 	uint32_t im_serial;
 	uint32_t im_mods;
 	int im_event_fd;
+	int im_candidate_len;
 
 	int im_repeat_timer;
 	int32_t im_repeat_delay;
 	int32_t im_repeat_rate;
 	uint32_t im_repeat_key;
-	int im_candidate_num;
-	int im_candidate_page;
-
-	const char *im_aux_text;
-	const char *im_cand_text[9];
+	uint32_t im_repeat_times;
 
 	char *im_prefix;
-	char *im_sbuf;
-	size_t im_sbuflen;
-	size_t im_sbufcap;
-	char *im_buf;
-	size_t im_buflen;
-	size_t im_bufcap;
-	size_t im_bufpos;
-	void *engine;
+	struct engine *engine;
 
-	struct wl_list im_pending_keys;
-	struct wl_list im_unreleased_keys;
+	uint32_t *im_pressed;
+	int im_pressed_num;
+	int im_pressed_cap;
 
-	char *xkb_keymap_string;
-	int xkb_mods_index[wlpinyin_mod_max];
 	struct xkb_context *xkb_context;
 	struct xkb_keymap *xkb_keymap;
 	struct xkb_state *xkb_state;
@@ -74,39 +61,37 @@ struct wlpinyin_state {
 
 extern void noop();
 
-void im_setup(struct wlpinyin_state *state);
+bool im_toggle(bool only_modifier,
+							 struct xkb_state *state,
+							 xkb_keysym_t keysym);
 
+int im_setup(struct wlpinyin_state *state);
 int im_event_fd(struct wlpinyin_state *state);
-
 int im_repeat_timerfd(struct wlpinyin_state *state);
-
 void im_repeat(struct wlpinyin_state *state, uint64_t times);
-
 void im_exit(struct wlpinyin_state *state);
-
 bool im_running(struct wlpinyin_state *state);
-
 void im_handle(struct wlpinyin_state *state);
-
 void im_destroy(struct wlpinyin_state *state);
 
-void *im_engine_new();
-void im_engine_free(void *);
+struct engine *im_engine_new();
+void im_engine_free(struct engine *);
 
-void im_engine_parse(void *, const char *, const char*);
-const char *im_engine_aux_get(void *, int cursor);
-void im_engine_aux_free(void *, const char *);
-const char *im_engine_candidate_get(void *, int);
-void im_engine_candidate_free(void *, const char *);
-size_t im_engine_candidate_choose(void *, int);
-void im_engine_remember(void *, const char *);
+const char *im_engine_raw_get(struct engine *);
+const char *im_engine_preedit_get(struct engine *);
+int im_engine_candidate_len(struct engine *);
+const char *im_engine_candidate_get(struct engine *, int);
+const char *im_engine_commit_text(struct engine *);
+bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
+bool im_engine_page(struct engine *, bool next);
+bool im_engine_cursor(struct engine *, bool right);
+bool im_engine_delete(struct engine *, bool del);
+bool im_engine_candidate_choose(struct engine *, int);
 
-// maybe called even engined is started
-void im_engine_activate(void *);
+void im_engine_activate(struct engine *);
 // used to ungrab unneeded keys when it's not in selection
-bool im_engine_activated(void *);
-// maybe called even engined is stopped
-void im_engine_deactivate(void *);
+bool im_engine_activated(struct engine *);
+void im_engine_deactivate(struct engine *);
 
 #define wlpinyin_err(fmt, ...) \
 	fprintf(stderr, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)

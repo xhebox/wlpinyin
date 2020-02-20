@@ -1,172 +1,265 @@
-#include <pinyin.h>
+#include <limits.h>
+#include <rime_api.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "wlpinyin.h"
 
-#define PINYIN_DATA_SYSTEM "/lib/libpinyin/data"
-#define PINYIN_DATA_USER "/home/xhe/.config/pinyin"
-
-typedef struct pinyin_engine {
-	pinyin_context_t *context;
-	pinyin_instance_t *instance;
+typedef struct engine {
+	RimeApi *api;
+	RimeTraits traits;
+	RimeSessionId sess;
+	RimeStatus status;
+	RimeContext context;
+	RimeCommit commit;
 	bool running;
-} pinyin_engine;
+	bool ready;
+	char *user_dir;
+} rime_engine;
 
-void *im_engine_new() {
-	pinyin_engine *engine = calloc(1, sizeof(pinyin_engine));
+static void handle_notify(void *context_object,
+													RimeSessionId session_id,
+													const char *message_type,
+													const char *message_value) {
+	wlpinyin_dbg("context_obj: %p, sess: %ld, msgtype: %s, msg: %s",
+							 context_object, session_id, message_type, message_value);
+	rime_engine *engine = context_object;
+	if (engine == NULL)
+		return;
+
+	if (strcmp(message_type, "deploy") == 0) {
+		if (strcmp(message_value, "success") == 0) {
+			engine->ready = true;
+		}
+	}
+}
+
+static void im_engine_update(rime_engine *engine) {
+	RimeApi *api = engine->api;
+
+	RIME_STRUCT_CLEAR(engine->status);
+	api->free_status(&engine->status);
+	api->get_status(engine->sess, &engine->status);
+
+	RIME_STRUCT_CLEAR(engine->context);
+	api->free_context(&engine->context);
+	api->get_context(engine->sess, &engine->context);
+
+	RIME_STRUCT_CLEAR(engine->commit);
+	api->free_commit(&engine->commit);
+	api->get_commit(engine->sess, &engine->commit);
+}
+
+rime_engine *im_engine_new() {
+	rime_engine *engine = calloc(1, sizeof(rime_engine));
 	if (engine == NULL) {
 		return NULL;
 	}
 
-	engine->context = pinyin_init(PINYIN_DATA_SYSTEM, PINYIN_DATA_USER);
-	if (engine->context == NULL) {
-		wlpinyin_err("failed to setup pinyin context");
+	engine->api = rime_get_api();
+	if (engine->api == NULL) {
+		wlpinyin_err("failed to setup rime api");
 		im_engine_free(engine);
 		return NULL;
 	}
 
-	pinyin_option_t options = PINYIN_INCOMPLETE | PINYIN_CORRECT_ALL |
-														USE_DIVIDED_TABLE | USE_RESPLIT_TABLE |
-														DYNAMIC_ADJUST;
-	pinyin_set_options(engine->context, options);
+	RimeApi *api = engine->api;
 
-	engine->instance = pinyin_alloc_instance(engine->context);
-	if (engine->instance == NULL) {
-		wlpinyin_err("failed to setup pinyin instance");
-		im_engine_free(engine);
-		return NULL;
+	RIME_STRUCT_INIT(RimeTraits, engine->traits);
+	engine->traits.shared_data_dir = "/share/rime-data";
+
+	char *home = getenv("HOME");
+	if (home == NULL) {
+		return false;
 	}
 
-	engine->running = false;
+	int size = snprintf(NULL, 0, "%s/.config/wlpinyin", home);
+	engine->user_dir = malloc(size + 1);
+	snprintf(engine->user_dir, size + 1, "%s/.config/wlpinyin", home);
+	engine->traits.user_data_dir = engine->user_dir;
 
-	pinyin_set_double_pinyin_scheme(engine->context, DOUBLE_PINYIN_XHE);
+	engine->traits.distribution_name = "wlpinyin";
+	engine->traits.distribution_code_name = "wlpinyin";
+	engine->traits.distribution_version = "0.1";
+	engine->traits.app_name = "rime.wlpinyin";
+	api->setup(&engine->traits);
+
+	api->set_notification_handler(handle_notify, engine);
+
+	api->initialize(&engine->traits);
+
+	engine->ready = false;
+	api->start_maintenance(true);
+
+	while (!engine->ready)
+		;
+
+	engine->sess = api->create_session();
+
+	RimeSchemaList schemas;
+	api->get_schema_list(&schemas);
+	for (int i = 0; i < schemas.size; i++) {
+		wlpinyin_dbg("schema_name: %s, id: %s", schemas.list[i].name,
+								 schemas.list[i].schema_id);
+		if (api->select_schema(engine->sess, schemas.list[i].schema_id))
+			break;
+	}
+	api->free_schema_list(&schemas);
+
+	RIME_STRUCT_INIT(RimeStatus, engine->status);
+	RIME_STRUCT_INIT(RimeContext, engine->context);
+	RIME_STRUCT_INIT(RimeCommit, engine->commit);
 
 	return engine;
 }
 
-void im_engine_free(void *_engine) {
-	pinyin_engine *engine = _engine;
+void im_engine_free(rime_engine *engine) {
 	if (engine == NULL)
 		return;
 
-	if (engine->instance != NULL)
-		pinyin_free_instance(engine->instance);
-
-	if (engine->context != NULL) {
-		pinyin_save(engine->context);
-		pinyin_fini(engine->context);
-	}
-
+	if (engine->user_dir != NULL)
+		free(engine->user_dir);
+	engine->api->free_commit(&engine->commit);
+	engine->api->free_context(&engine->context);
+	engine->api->free_status(&engine->status);
+	engine->api->destroy_session(engine->sess);
+	im_engine_deactivate(engine);
+	engine->api->finalize(&engine->traits);
 	free(engine);
 }
 
-void im_engine_activate(void *_engine) {
-	pinyin_engine *engine = _engine;
+void im_engine_activate(rime_engine *engine) {
 	if (engine == NULL)
 		return;
 
 	if (!engine->running) {
 		engine->running = true;
-		pinyin_reset(engine->instance);
+		engine->api->clear_composition(engine->sess);
 	}
 }
 
-bool im_engine_activated(void *_engine) {
-	pinyin_engine *engine = _engine;
+bool im_engine_activated(rime_engine *engine) {
 	if (engine == NULL)
 		return false;
 
 	return engine->running;
 }
 
-void im_engine_deactivate(void *_engine) {
-	pinyin_engine *engine = _engine;
+void im_engine_deactivate(rime_engine *engine) {
 	if (engine == NULL)
 		return;
 
 	if (engine->running) {
 		engine->running = false;
-		pinyin_save(engine->context);
 	}
 }
 
-const char *im_engine_aux_get(void *_engine, int cursor) {
-	pinyin_engine *engine = _engine;
+const char *im_engine_raw_get(rime_engine *engine) {
 	if (engine == NULL || !engine->running)
 		return NULL;
 
-	gchar *aux_text = NULL;
-	pinyin_get_double_pinyin_auxiliary_text(engine->instance, cursor, &aux_text);
-	return aux_text;
+	return engine->api->get_input(engine->sess);
 }
 
-void im_engine_aux_free(void *_engine, const char *aux) {
-	pinyin_engine *engine = _engine;
-	if (engine == NULL)
-		return;
-
-	g_free((void *)aux);
-}
-
-void im_engine_parse(void *_engine, const char *text, const char *prefix) {
-	pinyin_engine *engine = _engine;
-	if (engine == NULL || !engine->running)
-		return;
-
-	pinyin_parse_more_double_pinyins(engine->instance, text);
-
-	pinyin_guess_sentence_with_prefix(engine->instance, prefix);
-	pinyin_guess_predicted_candidates(engine->instance, prefix);
-	pinyin_guess_candidates(
-			engine->instance, 0,
-			SORT_BY_PHRASE_LENGTH_AND_PINYIN_LENGTH_AND_FREQUENCY);
-}
-
-const char *im_engine_candidate_get(void *_engine, int index) {
-	pinyin_engine *engine = _engine;
+const char *im_engine_preedit_get(rime_engine *engine) {
 	if (engine == NULL || !engine->running)
 		return NULL;
 
-	guint uind = index;
-	guint num = 0;
-	pinyin_get_n_candidate(engine->instance, &num);
-	if (uind > num)
-		return NULL;
-
-	lookup_candidate_t *candidate = NULL;
-	pinyin_get_candidate(engine->instance, uind, &candidate);
-	if (candidate == NULL)
-		return NULL;
-
-	const char *ptr = NULL;
-	pinyin_get_candidate_string(engine->instance, candidate, &ptr);
-	return ptr;
+	return engine->context.composition.preedit;
 }
 
-void im_engine_candidate_free(void *_engine, const char *text) {
-	pinyin_engine *engine = _engine;
-	if (engine == NULL)
-		return;
+bool im_engine_key(rime_engine *engine,
+									 xkb_keysym_t keycode,
+									 xkb_mod_mask_t mods) {
+	if (engine == NULL || !engine->running)
+		return false;
 
-	// g_free((void *)text);
+	bool res = engine->api->process_key(engine->sess, keycode, mods);
+
+	im_engine_update(engine);
+
+	wlpinyin_dbg("processed: %d", res);
+
+	return res;
 }
 
-size_t im_engine_candidate_choose(void *_engine, int index) {
-	pinyin_engine *engine = _engine;
+bool im_engine_page(rime_engine *engine, bool next) {
+	if (engine == NULL || !engine->running)
+		return false;
+
+	bool res = engine->api->process_key(
+			engine->sess, next ? XKB_KEY_Page_Down : XKB_KEY_Page_Up, 0);
+	im_engine_update(engine);
+
+	wlpinyin_dbg("page[%s]: %d", next ? "next" : "prev", res);
+	return res;
+}
+
+int im_engine_candidate_len(rime_engine *engine) {
 	if (engine == NULL || !engine->running)
 		return 0;
 
-	lookup_candidate_t *candidate = NULL;
-	pinyin_get_candidate(engine->instance, index, &candidate);
-	if (candidate == NULL)
-		return 0;
-
-	return pinyin_choose_candidate(engine->instance, 0, candidate);
+	return engine->context.menu.num_candidates;
 }
 
-void im_engine_remember(void *_engine, const char *text) {
-	pinyin_engine *engine = _engine;
-	if (engine == NULL)
-		return;
+const char *im_engine_candidate_get(rime_engine *engine, int index) {
+	if (engine == NULL || !engine->running)
+		return NULL;
 
-	pinyin_remember_user_input(engine->instance, text, -1);
+	if (index >= engine->context.menu.num_candidates)
+		return NULL;
+
+	RimeCandidate *cand = &engine->context.menu.candidates[index];
+
+	return cand->text;
+}
+
+const char *im_engine_commit_text(rime_engine *engine) {
+	if (engine == NULL || !engine->running)
+		return false;
+
+	return engine->commit.text;
+}
+
+bool im_engine_candidate_choose(rime_engine *engine, int index) {
+	if (engine == NULL || !engine->running)
+		return false;
+
+	if (index >= engine->context.menu.num_candidates)
+		return false;
+
+	bool res = engine->api->select_candidate_on_current_page(engine->sess, index);
+
+	wlpinyin_dbg("select[%d]: %s", index, res ? "true" : "false");
+
+	im_engine_update(engine);
+
+	return res;
+}
+
+bool im_engine_cursor(rime_engine *engine, bool right) {
+	if (engine == NULL || !engine->running)
+		return false;
+
+	bool res = engine->api->process_key(engine->sess,
+																			right ? XKB_KEY_Right : XKB_KEY_Left, 0);
+	im_engine_update(engine);
+
+	wlpinyin_dbg("cursor[%s]: %d", right ? "right" : "left", res);
+
+	return res;
+}
+
+bool im_engine_delete(rime_engine *engine, bool delete) {
+	if (engine == NULL || !engine->running)
+		return false;
+
+	bool res = engine->api->process_key(
+			engine->sess, delete ? XKB_KEY_Delete : XKB_KEY_BackSpace, 0);
+
+	im_engine_update(engine);
+
+	wlpinyin_dbg("delete[%s]: %d", delete ? "delete" : "backspace", res);
+
+	return res;
 }

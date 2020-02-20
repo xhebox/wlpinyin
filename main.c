@@ -84,7 +84,8 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	im_setup(state);
+	if (im_setup(state) < 0)
+		return EXIT_FAILURE;
 
 	struct pollfd fds[4] = {};
 
