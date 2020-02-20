@@ -71,7 +71,6 @@ static void im_choose_candidate(struct wlpinyin_state *state, int index) {
 	im_engine_candidate_choose(state->engine, index);
 	const char *text = im_engine_commit_text(state->engine);
 	if (text != NULL) {
-		im_send_preedit(state, "");
 		im_send_text(state, text);
 	}
 }
@@ -85,7 +84,6 @@ static void im_activate_engine(struct wlpinyin_state *state) {
 static void im_deactivate_engine(struct wlpinyin_state *state) {
 	if (im_engine_activated(state->engine)) {
 		im_send_preedit(state, "");
-		im_send_text(state, "");
 		im_engine_deactivate(state->engine);
 	}
 }
