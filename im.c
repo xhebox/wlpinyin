@@ -56,7 +56,8 @@ static void im_panel_update(struct wlpinyin_state *state) {
 	for (int i = 0; i < state->im_candidate_len; i++) {
 		const char *cand = im_engine_candidate_get(state->engine, i);
 		wlpinyin_dbg("cand[%d]: %s", i + 1, cand);
-		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, " [%d]%s", i, cand);
+		bufptr +=
+				snprintf(&buf[bufptr], sizeof buf - bufptr, " [%d]%s", i + 1, cand);
 	}
 	buf[bufptr] = 0;
 
