@@ -154,13 +154,6 @@ void im_engine_deactivate(rime_engine *engine) {
 	}
 }
 
-const char *im_engine_raw_get(rime_engine *engine) {
-	if (engine == NULL || !engine->running)
-		return NULL;
-
-	return engine->api->get_input(engine->sess);
-}
-
 const char *im_engine_preedit_get(rime_engine *engine) {
 	if (engine == NULL || !engine->running)
 		return NULL;

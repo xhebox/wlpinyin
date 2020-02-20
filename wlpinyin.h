@@ -77,7 +77,6 @@ void im_destroy(struct wlpinyin_state *state);
 struct engine *im_engine_new();
 void im_engine_free(struct engine *);
 
-const char *im_engine_raw_get(struct engine *);
 const char *im_engine_preedit_get(struct engine *);
 int im_engine_candidate_len(struct engine *);
 const char *im_engine_candidate_get(struct engine *, int);

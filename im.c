@@ -453,7 +453,7 @@ static bool im_handle_key(struct wlpinyin_state *state,
 				handled = true;
 				break;
 			case XKB_KEY_Return:
-				im_send_text(state, im_engine_raw_get(state->engine));
+				im_send_text(state, im_engine_preedit_get(state->engine));
 			case XKB_KEY_Escape:
 				im_deactivate_engine(state);
 				handled = true;
