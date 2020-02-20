@@ -38,12 +38,6 @@ static void im_panel_update(struct wlpinyin_state *state) {
 
 	state->im_candidate_len = im_engine_candidate_len(state->engine);
 
-	const char *text = im_engine_commit_text(state->engine);
-	if (text != NULL) {
-		im_send_preedit(state, "");
-		return;
-	}
-
 	const char *preedit = im_engine_preedit_get(state->engine);
 	if (preedit == NULL) {
 		im_send_preedit(state, "");
@@ -572,6 +566,11 @@ static bool im_handle_key(struct wlpinyin_state *state,
 		}
 
 		if (handled) {
+			const char *text = im_engine_commit_text(state->engine);
+			if (text != NULL) {
+				im_deactivate_engine(state);
+			}
+
 			if (im_engine_activated(state->engine)) {
 				im_panel_update(state);
 			}
