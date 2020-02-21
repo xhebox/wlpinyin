@@ -567,7 +567,8 @@ static bool im_handle_key(struct wlpinyin_state *state,
 
 		if (handled) {
 			const char *text = im_engine_commit_text(state->engine);
-			if (text != NULL) {
+			const char *preedit = im_engine_preedit_get(state->engine);
+			if (text != NULL || preedit == NULL || strlen(preedit) == 0) {
 				im_deactivate_engine(state);
 			}
 
