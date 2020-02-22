@@ -452,6 +452,7 @@ static bool im_handle_key(struct wlpinyin_state *state,
 				im_choose_candidate(state, 0);
 				handled = true;
 				break;
+			case XKB_KEY_Caps_Lock:
 			case XKB_KEY_Return:
 				im_send_text(state, im_engine_preedit_get(state->engine));
 			case XKB_KEY_Escape:
@@ -530,30 +531,6 @@ static bool im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_w:
 			case XKB_KEY_x:
 			case XKB_KEY_y:
-			case XKB_KEY_A:
-			case XKB_KEY_B:
-			case XKB_KEY_D:
-			case XKB_KEY_E:
-			case XKB_KEY_F:
-			case XKB_KEY_G:
-			case XKB_KEY_H:
-			case XKB_KEY_I:
-			case XKB_KEY_J:
-			case XKB_KEY_K:
-			case XKB_KEY_L:
-			case XKB_KEY_M:
-			case XKB_KEY_N:
-			case XKB_KEY_O:
-			case XKB_KEY_P:
-			case XKB_KEY_Q:
-			case XKB_KEY_R:
-			case XKB_KEY_S:
-			case XKB_KEY_T:
-			case XKB_KEY_U:
-			case XKB_KEY_V:
-			case XKB_KEY_W:
-			case XKB_KEY_X:
-			case XKB_KEY_Y:
 				im_activate_engine(state);
 				im_engine_key(state->engine, keysym,
 											xkb_state_serialize_mods(state->xkb_state,
