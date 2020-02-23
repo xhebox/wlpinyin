@@ -507,6 +507,9 @@ static bool im_handle_key(struct wlpinyin_state *state,
 					handled = true;
 					break;
 				}
+
+				if (keysym == XKB_KEY_C || keysym == XKB_KEY_Z)
+					break;
 			case XKB_KEY_a:
 			case XKB_KEY_b:
 			case XKB_KEY_d:
