@@ -609,6 +609,7 @@ static bool im_handle_key(struct wlpinyin_state *state,
 				state->im_forwarding = true;
 				im_deactivate_engine(state);
 			}
+			handled = true;
 		}
 	}
 
