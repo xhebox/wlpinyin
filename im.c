@@ -82,21 +82,6 @@ static void im_deactivate_engine(struct wlpinyin_state *state) {
 	}
 }
 
-static void handle_surrounding(void *data,
-															 struct zwp_input_method_v2 *zwp_input_method_v2,
-															 const char *text,
-															 uint32_t cursor,
-															 uint32_t anchor) {
-	UNUSED(zwp_input_method_v2);
-	struct wlpinyin_state *state = data;
-	if (state->im_prefix != NULL)
-		free((void *)state->im_prefix);
-
-	state->im_prefix = strdup(text);
-	state->im_prefix[cursor] = 0;
-	// wlpinyin_dbg("surround: %d,%d, %s", cursor, anchor, text);
-}
-
 static void handle_keymap(
 		void *data,
 		struct zwp_input_method_keyboard_grab_v2 *zwp_input_method_keyboard_grab_v2,
@@ -179,20 +164,23 @@ static void handle_key(
 
 	if (keynode.pressed) {
 		im_add_pressed(state, keynode.keycode);
-		struct itimerspec timer = {
-				.it_value =
-						{
-								.tv_nsec = state->im_repeat_delay * 1000000,
-								.tv_sec = 0,
-						},
-				.it_interval =
-						{
-								.tv_nsec = 1000000000 / state->im_repeat_rate,
-								.tv_sec = 0,
-						},
-		};
-		timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
-		state->im_repeat_key = keynode.keycode;
+
+		if (xkb_keymap_key_repeats(state->xkb_keymap, key + 8) == 1) {
+			struct itimerspec timer = {
+					.it_value =
+							{
+									.tv_nsec = state->im_repeat_delay * 1000000,
+									.tv_sec = 0,
+							},
+					.it_interval =
+							{
+									.tv_nsec = 1000000000 / state->im_repeat_rate,
+									.tv_sec = 0,
+							},
+			};
+			timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
+			state->im_repeat_key = keynode.keycode;
+		}
 
 		im_handle_key(state, &keynode);
 	} else {
@@ -201,27 +189,6 @@ static void handle_key(
 		}
 	}
 
-	im_notify(state);
-}
-
-static void handle_modifiers(
-		void *data,
-		struct zwp_input_method_keyboard_grab_v2 *zwp_input_method_keyboard_grab_v2,
-		uint32_t serial,
-		uint32_t mods_depressed,
-		uint32_t mods_latched,
-		uint32_t mods_locked,
-		uint32_t group) {
-	UNUSED(zwp_input_method_keyboard_grab_v2);
-	struct wlpinyin_state *state = data;
-	wlpinyin_dbg(
-			"modifiers: serial %d, depressed %d, latched %d, locked %d, group %d",
-			serial, mods_depressed, mods_latched, mods_locked, group);
-	zwp_virtual_keyboard_v1_modifiers(state->virtual_keyboard, mods_depressed,
-																		mods_latched, mods_locked, group);
-	xkb_state_update_mask(state->xkb_state, mods_depressed, mods_latched,
-												mods_locked, 0, 0, group);
-	state->im_only_modifier = true;
 	im_notify(state);
 }
 
@@ -335,7 +302,7 @@ int im_setup(struct wlpinyin_state *state) {
 	static const struct zwp_input_method_v2_listener im_listener = {
 			.activate = handle_activate,
 			.deactivate = handle_deactivate,
-			.surrounding_text = handle_surrounding,
+			.surrounding_text = noop,
 			.text_change_cause = noop,
 			.content_type = noop,
 			.done = handle_done,
@@ -349,7 +316,7 @@ int im_setup(struct wlpinyin_state *state) {
 			im_activate_listener = {
 					.keymap = handle_keymap,
 					.key = handle_key,
-					.modifiers = handle_modifiers,
+					.modifiers = noop,
 					.repeat_info = handle_repeat_info,
 			};
 	zwp_input_method_keyboard_grab_v2_add_listener(
@@ -543,11 +510,7 @@ static bool im_handle_key(struct wlpinyin_state *state,
 				}
 
 				im_activate_engine(state);
-				im_engine_key(state->engine, keysym,
-											xkb_state_serialize_mods(state->xkb_state,
-																							 XKB_STATE_MODS_DEPRESSED) |
-													xkb_state_serialize_mods(state->xkb_state,
-																									 XKB_STATE_MODS_LATCHED));
+				im_engine_key(state->engine, keysym, 0);
 				handled = true;
 				break;
 			}
@@ -580,6 +543,8 @@ static bool im_handle_key(struct wlpinyin_state *state,
 		case XKB_KEY_Hyper_R:
 		case XKB_KEY_Shift_Lock:
 		case XKB_KEY_Caps_Lock:
+			if (!handled)
+				state->im_only_modifier = true;
 			break;
 		default:
 			state->im_only_modifier = false;
@@ -592,11 +557,21 @@ static bool im_handle_key(struct wlpinyin_state *state,
 				state->im_forwarding = true;
 				im_deactivate_engine(state);
 			}
-			handled = true;
 		}
 	}
 
 	if (!handled) {
+		xkb_state_update_key(state->xkb_state, keynode->keycode + 8,
+												 keynode->pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
+
+		zwp_virtual_keyboard_v1_modifiers(
+				state->virtual_keyboard,
+				xkb_state_serialize_mods(state->xkb_state, XKB_STATE_MODS_DEPRESSED),
+				xkb_state_serialize_mods(state->xkb_state, XKB_STATE_MODS_LATCHED),
+				xkb_state_serialize_mods(state->xkb_state, XKB_STATE_MODS_LOCKED),
+				xkb_state_serialize_layout(state->xkb_state,
+																	 XKB_STATE_LAYOUT_EFFECTIVE));
+
 		if (keynode->pressed) {
 			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
 																	keynode->keycode,
@@ -606,6 +581,7 @@ static bool im_handle_key(struct wlpinyin_state *state,
 																	keynode->keycode,
 																	WL_KEYBOARD_KEY_STATE_RELEASED);
 		}
+
 		handled = true;
 	}
 
