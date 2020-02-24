@@ -160,6 +160,7 @@ static void handle_key(
 		uint32_t kstate) {
 	UNUSED(zwp_input_method_keyboard_grab_v2);
 	struct wlpinyin_state *state = data;
+
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym(state->xkb_state, key + 8);
 
 	struct itimerspec timer = {};
@@ -496,22 +497,9 @@ static bool im_handle_key(struct wlpinyin_state *state,
 
 		if (!handled) {
 			switch (keysym) {
-			case XKB_KEY_c:
-			case XKB_KEY_z:
-			case XKB_KEY_C:
-			case XKB_KEY_Z:
-				if (xkb_state_mod_name_is_active(state->xkb_state, XKB_MOD_NAME_CTRL,
-																				 XKB_STATE_MODS_DEPRESSED) > 0) {
-					im_deactivate_engine(state);
-					im_exit(state);
-					handled = true;
-					break;
-				}
-
-				if (keysym == XKB_KEY_C || keysym == XKB_KEY_Z)
-					break;
 			case XKB_KEY_a:
 			case XKB_KEY_b:
+			case XKB_KEY_c:
 			case XKB_KEY_d:
 			case XKB_KEY_e:
 			case XKB_KEY_f:
@@ -534,6 +522,43 @@ static bool im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_w:
 			case XKB_KEY_x:
 			case XKB_KEY_y:
+			case XKB_KEY_z:
+			case XKB_KEY_A:
+			case XKB_KEY_B:
+			case XKB_KEY_C:
+			case XKB_KEY_D:
+			case XKB_KEY_E:
+			case XKB_KEY_F:
+			case XKB_KEY_G:
+			case XKB_KEY_H:
+			case XKB_KEY_I:
+			case XKB_KEY_J:
+			case XKB_KEY_K:
+			case XKB_KEY_L:
+			case XKB_KEY_M:
+			case XKB_KEY_N:
+			case XKB_KEY_O:
+			case XKB_KEY_P:
+			case XKB_KEY_Q:
+			case XKB_KEY_R:
+			case XKB_KEY_S:
+			case XKB_KEY_T:
+			case XKB_KEY_U:
+			case XKB_KEY_V:
+			case XKB_KEY_W:
+			case XKB_KEY_X:
+			case XKB_KEY_Y:
+			case XKB_KEY_Z:
+				if (xkb_state_mod_names_are_active(
+						state->xkb_state, XKB_STATE_MODS_DEPRESSED, XKB_STATE_MATCH_ANY,
+						XKB_MOD_NAME_CTRL, XKB_MOD_NAME_ALT, XKB_MOD_NAME_SHIFT,
+						XKB_MOD_NAME_LOGO, NULL) > 0) {
+					im_deactivate_engine(state);
+					im_exit(state);
+					handled = true;
+					break;
+				}
+
 				im_activate_engine(state);
 				im_engine_key(state->engine, keysym,
 											xkb_state_serialize_mods(state->xkb_state,
