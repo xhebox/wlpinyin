@@ -163,8 +163,7 @@ static void handle_key(
 
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym(state->xkb_state, key + 8);
 
-	struct itimerspec timer = {};
-	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
+	state->im_repeat_key = 0;
 
 	struct wlpinyin_key keynode = {};
 	keynode.keycode = key;
@@ -241,17 +240,12 @@ static void handle_repeat_info(
 
 static void im_activate(struct wlpinyin_state *state) {
 	state->im_forwarding = true;
-
-	struct itimerspec timer = {};
-	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
+	state->im_repeat_key = 0;
 }
 
 static void im_deactivate(struct wlpinyin_state *state) {
 	state->im_forwarding = true;
-
-	struct itimerspec timer = {};
-	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
-
+	state->im_repeat_key = 0;
 	im_deactivate_engine(state);
 }
 
@@ -374,6 +368,12 @@ int im_repeat_timerfd(struct wlpinyin_state *state) {
 }
 
 void im_repeat(struct wlpinyin_state *state, uint64_t times) {
+	if (state->im_repeat_key == 0) {
+		struct itimerspec timer = {};
+		timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
+		return;
+	}
+
 	state->im_repeat_times += times;
 	im_notify(state);
 }
