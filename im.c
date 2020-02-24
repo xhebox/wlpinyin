@@ -171,9 +171,6 @@ static void handle_key(
 	keynode.keysym = keysym;
 	keynode.pressed = kstate == WL_KEYBOARD_KEY_STATE_PRESSED;
 
-	xkb_state_update_key(state->xkb_state, key + 8,
-											 keynode.pressed ? XKB_KEY_UP : XKB_KEY_DOWN);
-
 #ifndef NDEBUG
 	char buf[512] = {};
 	xkb_keysym_get_name(keysym, buf, sizeof buf);
@@ -243,49 +240,19 @@ static void handle_repeat_info(
 }
 
 static void im_activate(struct wlpinyin_state *state) {
-	if (state->input_method_keyboard_grab == NULL) {
-		state->input_method_keyboard_grab =
-				zwp_input_method_v2_grab_keyboard(state->input_method);
-		static const struct zwp_input_method_keyboard_grab_v2_listener
-				im_activate_listener = {
-						.keymap = handle_keymap,
-						.key = handle_key,
-						.modifiers = handle_modifiers,
-						.repeat_info = handle_repeat_info,
-				};
-		zwp_input_method_keyboard_grab_v2_add_listener(
-				state->input_method_keyboard_grab, &im_activate_listener, state);
-	}
-
 	state->im_forwarding = true;
 
 	struct itimerspec timer = {};
 	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
-
-	wl_display_roundtrip(state->display);
 }
 
 static void im_deactivate(struct wlpinyin_state *state) {
 	state->im_forwarding = true;
 
-	for (int i = 0; i < state->im_pressed_num; i++) {
-		zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
-																state->im_pressed[i],
-																WL_KEYBOARD_KEY_STATE_RELEASED);
-	}
-	state->im_pressed_num = 0;
-
 	struct itimerspec timer = {};
 	timerfd_settime(state->im_repeat_timer, 0, &timer, NULL);
 
 	im_deactivate_engine(state);
-
-	if (state->input_method_keyboard_grab != NULL) {
-		zwp_input_method_keyboard_grab_v2_release(
-				state->input_method_keyboard_grab);
-		state->input_method_keyboard_grab = NULL;
-	}
-	wl_display_roundtrip(state->display);
 }
 
 static void handle_activate(void *data,
@@ -382,6 +349,18 @@ int im_setup(struct wlpinyin_state *state) {
 	};
 	zwp_input_method_v2_add_listener(state->input_method, &im_listener, state);
 
+	state->input_method_keyboard_grab =
+			zwp_input_method_v2_grab_keyboard(state->input_method);
+	static const struct zwp_input_method_keyboard_grab_v2_listener
+			im_activate_listener = {
+					.keymap = handle_keymap,
+					.key = handle_key,
+					.modifiers = handle_modifiers,
+					.repeat_info = handle_repeat_info,
+			};
+	zwp_input_method_keyboard_grab_v2_add_listener(
+			state->input_method_keyboard_grab, &im_activate_listener, state);
+
 	wl_display_roundtrip(state->display);
 	return 0;
 }
@@ -400,6 +379,13 @@ void im_repeat(struct wlpinyin_state *state, uint64_t times) {
 }
 
 void im_exit(struct wlpinyin_state *state) {
+	for (int i = 0; i < state->im_pressed_num; i++) {
+		zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
+																state->im_pressed[i],
+																WL_KEYBOARD_KEY_STATE_RELEASED);
+	}
+	state->im_pressed_num = 0;
+
 	im_deactivate(state);
 	state->im_exit = true;
 	im_notify(state);
@@ -550,12 +536,9 @@ static bool im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_Y:
 			case XKB_KEY_Z:
 				if (xkb_state_mod_names_are_active(
-						state->xkb_state, XKB_STATE_MODS_DEPRESSED, XKB_STATE_MATCH_ANY,
-						XKB_MOD_NAME_CTRL, XKB_MOD_NAME_ALT, XKB_MOD_NAME_SHIFT,
-						XKB_MOD_NAME_LOGO, NULL) > 0) {
-					im_deactivate_engine(state);
-					im_exit(state);
-					handled = true;
+								state->xkb_state, XKB_STATE_MODS_DEPRESSED, XKB_STATE_MATCH_ANY,
+								XKB_MOD_NAME_CTRL, XKB_MOD_NAME_ALT, XKB_MOD_NAME_SHIFT,
+								XKB_MOD_NAME_LOGO, NULL) > 0) {
 					break;
 				}
 
@@ -664,6 +647,13 @@ void im_destroy(struct wlpinyin_state *state) {
 
 	if (state->im_pressed != NULL)
 		free(state->im_pressed);
+
+	if (state->input_method_keyboard_grab != NULL) {
+		zwp_input_method_keyboard_grab_v2_release(
+				state->input_method_keyboard_grab);
+		state->input_method_keyboard_grab = NULL;
+	}
+
 	im_deactivate(state);
 	im_engine_free(state->engine);
 	xkb_state_unref(state->xkb_state);
@@ -671,4 +661,5 @@ void im_destroy(struct wlpinyin_state *state) {
 	xkb_context_unref(state->xkb_context);
 	zwp_virtual_keyboard_v1_destroy(state->virtual_keyboard);
 	zwp_input_method_v2_destroy(state->input_method);
+	wl_display_roundtrip(state->display);
 }
