@@ -452,6 +452,8 @@ static bool im_handle_key(struct wlpinyin_state *state,
 		if (!handled) {
 			switch (keysym) {
 			case XKB_KEY_Caps_Lock:
+				im_choose_candidate(state, 0);
+				break;
 			case XKB_KEY_A:
 			case XKB_KEY_B:
 			case XKB_KEY_C:
@@ -478,8 +480,18 @@ static bool im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_X:
 			case XKB_KEY_Y:
 			case XKB_KEY_Z:
-				im_choose_candidate(state, 0);
-				break;
+			case XKB_KEY_F1:
+			case XKB_KEY_F2:
+			case XKB_KEY_F3:
+			case XKB_KEY_F4:
+			case XKB_KEY_F5:
+			case XKB_KEY_F6:
+			case XKB_KEY_F7:
+			case XKB_KEY_F8:
+			case XKB_KEY_F9:
+			case XKB_KEY_F10:
+			case XKB_KEY_F11:
+			case XKB_KEY_F12:
 			case XKB_KEY_a:
 			case XKB_KEY_b:
 			case XKB_KEY_c:
