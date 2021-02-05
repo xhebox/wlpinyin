@@ -222,7 +222,7 @@ static void handle_activate(void *data,
 														struct zwp_input_method_v2 *zwp_input_method_v2) {
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
-	wlpinyin_err("activate");
+	wlpinyin_dbg("activate");
 	im_activate(state);
 }
 
@@ -230,7 +230,7 @@ static void handle_deactivate(void *data,
 															struct zwp_input_method_v2 *zwp_input_method_v2) {
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
-	wlpinyin_err("deactivate");
+	wlpinyin_dbg("deactivate");
 	im_deactivate(state);
 }
 
