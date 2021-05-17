@@ -55,6 +55,7 @@ struct wlpinyin_state {
 	int im_pressed_cap;
 
 	struct xkb_context *xkb_context;
+	char *xkb_keymap_string;
 	struct xkb_keymap *xkb_keymap;
 	struct xkb_state *xkb_state;
 };

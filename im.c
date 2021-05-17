@@ -94,16 +94,29 @@ static void handle_keymap(
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("keymap: format %d, size %d, fd %d", format, size, fd);
 
+	char *keymap_string = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+	if (state->xkb_keymap_string != NULL &&
+			!strcmp(keymap_string, state->xkb_keymap_string)) {
+		munmap(keymap_string, size);
+		return;
+	}
+
 	xkb_state_unref(state->xkb_state);
 	xkb_keymap_unref(state->xkb_keymap);
+	if (state->xkb_keymap_string != NULL)
+		free(state->xkb_keymap_string);
 
-	char *keymap_string = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
 	state->xkb_keymap = xkb_keymap_new_from_string(
-			state->xkb_context, keymap_string, XKB_KEYMAP_FORMAT_TEXT_V1,
-			XKB_KEYMAP_COMPILE_NO_FLAGS);
-	munmap(keymap_string, size);
-
+			state->xkb_context, keymap_string, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	state->xkb_keymap_string =
+			xkb_keymap_get_as_string(state->xkb_keymap, format);
+	state->xkb_keymap_string = strdup(keymap_string);
+	state->xkb_keymap =
+			xkb_keymap_new_from_string(state->xkb_context, state->xkb_keymap_string,
+																 format, XKB_KEYMAP_COMPILE_NO_FLAGS);
 	state->xkb_state = xkb_state_new(state->xkb_keymap);
+
+	munmap(keymap_string, size);
 	zwp_virtual_keyboard_v1_keymap(state->virtual_keyboard, format, fd, size);
 	im_notify(state);
 }
@@ -634,11 +647,15 @@ void im_handle(struct wlpinyin_state *state) {
 }
 
 void im_destroy(struct wlpinyin_state *state) {
-	if (state->im_prefix != NULL)
+	if (state->im_prefix != NULL) {
 		free(state->im_prefix);
+		state->im_prefix = NULL;
+	}
 
-	if (state->im_pressed != NULL)
+	if (state->im_pressed != NULL) {
 		free(state->im_pressed);
+		state->im_pressed = NULL;
+	}
 
 	if (state->input_method_keyboard_grab != NULL) {
 		zwp_input_method_keyboard_grab_v2_release(
@@ -649,6 +666,10 @@ void im_destroy(struct wlpinyin_state *state) {
 	im_deactivate(state);
 	im_engine_free(state->engine);
 	xkb_state_unref(state->xkb_state);
+	if (state->xkb_keymap_string != NULL) {
+		state->xkb_keymap_string = NULL;
+		free(state->xkb_keymap_string);
+	}
 	xkb_keymap_unref(state->xkb_keymap);
 	xkb_context_unref(state->xkb_context);
 	zwp_virtual_keyboard_v1_destroy(state->virtual_keyboard);
