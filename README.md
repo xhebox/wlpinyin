@@ -14,7 +14,7 @@ It will not be too hard to add new input backend engine, enable it by pkgconf ch
 1. Make use you have [rime](https://github.com/rime/librime) installed
 2. Place your desired rime configuration files in ~/.config/wlpinyin/
     - [Rime's minimal example](https://github.com/rime/librime/tree/master/data/minimal) is a good place to start.
-    - Rime also provides automatic configuration scripts like [brice](https://github.com/rime/brise) and [plum](https://github.com/rime/plum)
+    - Rime also provides automatic configuration scripts like [brise](https://github.com/rime/brise) and [plum](https://github.com/rime/plum)
 
 ### Building
 ```
