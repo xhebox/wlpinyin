@@ -14,6 +14,7 @@ It will not be too hard to add new input backend engine, enable it by pkgconf ch
 1. Make use you have [rime](https://github.com/rime/librime) installed
 2. Place your desired rime configuration files in ~/.config/wlpinyin/
     - [Rime's minimal example](https://github.com/rime/librime/tree/master/data/minimal) is a good place to start.
+    - Rime also provides automatic configuration scripts like [brice](https://github.com/rime/brise) and [plum](https://github.com/rime/plum)
 
 ### Building
 ```
@@ -46,4 +47,5 @@ If characters show up as boxes, also check your rime config.
 If you get an error saying that wlpinyin cannot find a file, check your rime config.
 
 If wlpinyin works for you in most cases but not with certain programs, then you might notify the application developer.
-Applications such as Chromium are notorious for now working with many other input methods such as fcitx.
+Applications such as Chromium are notorious for not working with many other input methods such as fcitx under ozone, under xwayland it should work fine though.
+Specifically, it is text-input-v3 protocol for applications and input-method-v2 for compositors. With these protocols supported, wlpinyin can be used.
