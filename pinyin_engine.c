@@ -70,6 +70,7 @@ rime_engine *im_engine_new() {
 
 	char *home = getenv("HOME");
 	if (home == NULL) {
+		im_engine_free(engine);
 		return false;
 	}
 
@@ -95,6 +96,12 @@ rime_engine *im_engine_new() {
 		;
 
 	engine->sess = api->create_session();
+	if (engine->sess == 0) {
+		wlpinyin_err("failed to setup rime session");
+		free(engine->user_dir);
+		im_engine_free(engine);
+		return NULL;
+	}
 
 	RimeSchemaList schemas;
 	api->get_schema_list(&schemas);
