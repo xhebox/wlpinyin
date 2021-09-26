@@ -19,6 +19,7 @@ It will not be too hard to add new input backend engine, enable it by pkgconf ch
 ### Building
 ```
 git clone https://github.com/xhebox/wlpinyin
+cd wlpinyin
 meson build
 ninja -C build
 ```
