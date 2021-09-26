@@ -98,7 +98,6 @@ rime_engine *im_engine_new() {
 	engine->sess = api->create_session();
 	if (engine->sess == 0) {
 		wlpinyin_err("failed to setup rime session");
-		free(engine->user_dir);
 		im_engine_free(engine);
 		return NULL;
 	}
@@ -126,6 +125,7 @@ void im_engine_free(rime_engine *engine) {
 
 	if (engine->user_dir != NULL)
 		free(engine->user_dir);
+
 	engine->api->free_commit(&engine->commit);
 	engine->api->free_context(&engine->context);
 	engine->api->free_status(&engine->status);
