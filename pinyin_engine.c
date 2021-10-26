@@ -92,8 +92,9 @@ rime_engine *im_engine_new() {
 	engine->ready = false;
 	api->start_maintenance(true);
 
-	while (!engine->ready)
-		;
+	// wait for deploy
+	// https://github.com/DogLooksGood/emacs-rime/blob/b296856c21d32e700005110328fb6a1d48dcbf8d/lib.c#L136
+	api->join_maintenance_thread();
 
 	engine->sess = api->create_session();
 	if (engine->sess == 0) {
