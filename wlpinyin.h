@@ -13,7 +13,7 @@
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 
 // user config
-bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym);
+bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym, bool pressed);
 extern bool default_activation;
 
 // internal

@@ -163,11 +163,13 @@ static void im_handle_key(struct wlpinyin_state *state,
 								XKB_STATE_MODS_EFFECTIVE | XKB_STATE_LAYOUT_EFFECTIVE));
 			}
 		}
+	}
 
-		if (!handled && im_toggle(state->xkb_state, keynode->keysym)) {
+	if (!handled) {
+		if (im_toggle(state->xkb_state, keynode->keysym, keynode->pressed)) {
 			wlpinyin_dbg("toggle");
-			im_engine_reset(state->engine);
 			state->im_activated = !state->im_activated;
+			im_engine_reset(state->engine);
 			handled = true;
 		}
 	}
