@@ -12,7 +12,6 @@ typedef struct engine {
 	RimeStatus status;
 	RimeContext context;
 	RimeCommit commit;
-	bool running;
 	bool ready;
 	char *user_dir;
 } rime_engine;
@@ -24,7 +23,7 @@ static void handle_notify(void *context_object,
 	wlpinyin_dbg("context_obj: %p, sess: %ld, msgtype: %s, msg: %s",
 							 context_object, session_id, message_type, message_value);
 	rime_engine *engine = context_object;
-	if (engine == NULL)
+	if (!engine)
 		return;
 
 	if (strcmp(message_type, "deploy") == 0) {
@@ -52,7 +51,7 @@ static void im_engine_update(rime_engine *engine) {
 
 rime_engine *im_engine_new() {
 	rime_engine *engine = calloc(1, sizeof(rime_engine));
-	if (engine == NULL) {
+	if (!engine) {
 		return NULL;
 	}
 
@@ -121,7 +120,7 @@ rime_engine *im_engine_new() {
 }
 
 void im_engine_free(rime_engine *engine) {
-	if (engine == NULL)
+	if (!engine)
 		return;
 
 	if (engine->user_dir != NULL)
@@ -131,48 +130,22 @@ void im_engine_free(rime_engine *engine) {
 	engine->api->free_context(&engine->context);
 	engine->api->free_status(&engine->status);
 	engine->api->destroy_session(engine->sess);
-	im_engine_deactivate(engine);
 	engine->api->finalize(&engine->traits);
 	free(engine);
 }
 
-void im_engine_activate(rime_engine *engine) {
-	if (engine == NULL)
-		return;
-
-	if (!engine->running) {
-		engine->running = true;
-		engine->api->clear_composition(engine->sess);
-	}
-}
-
-bool im_engine_activated(rime_engine *engine) {
-	if (engine == NULL)
-		return false;
-
-	return engine->running;
-}
-
-void im_engine_deactivate(rime_engine *engine) {
-	if (engine == NULL)
-		return;
-
-	if (engine->running) {
-		engine->running = false;
-	}
-}
-
 const char *im_engine_preedit_get(rime_engine *engine) {
-	if (engine == NULL || !engine->running)
-		return NULL;
+	if (!engine)
+		return "";
 
-	return engine->context.composition.preedit;
+	const char *ret = engine->context.composition.preedit;
+	return ret ? ret : "";
 }
 
 bool im_engine_key(rime_engine *engine,
 									 xkb_keysym_t keycode,
 									 xkb_mod_mask_t mods) {
-	if (engine == NULL || !engine->running)
+	if (!engine)
 		return false;
 
 	bool res = engine->api->process_key(engine->sess, keycode, mods);
@@ -184,27 +157,25 @@ bool im_engine_key(rime_engine *engine,
 	return res;
 }
 
-bool im_engine_page(rime_engine *engine, bool next) {
-	if (engine == NULL || !engine->running)
-		return false;
+void im_engine_page(rime_engine *engine, bool next) {
+	if (!engine)
+		return;
 
 	bool res = engine->api->process_key(
 			engine->sess, next ? XKB_KEY_Page_Down : XKB_KEY_Page_Up, 0);
 	im_engine_update(engine);
-
 	wlpinyin_dbg("page[%s]: %d", next ? "next" : "prev", res);
-	return res;
 }
 
 int im_engine_candidate_len(rime_engine *engine) {
-	if (engine == NULL || !engine->running)
+	if (!engine)
 		return 0;
 
 	return engine->context.menu.num_candidates;
 }
 
 const char *im_engine_candidate_get(rime_engine *engine, int index) {
-	if (engine == NULL || !engine->running)
+	if (!engine)
 		return NULL;
 
 	if (index >= engine->context.menu.num_candidates)
@@ -216,44 +187,40 @@ const char *im_engine_candidate_get(rime_engine *engine, int index) {
 }
 
 const char *im_engine_commit_text(rime_engine *engine) {
-	if (engine == NULL || !engine->running)
-		return false;
-
-	return engine->commit.text;
+	if (!engine)
+		return "";
+	const char *ret = engine->commit.text;
+	return ret ? ret : "";
 }
 
-bool im_engine_candidate_choose(rime_engine *engine, int index) {
-	if (engine == NULL || !engine->running)
-		return false;
+void im_engine_candidate_choose(rime_engine *engine, int index) {
+	if (!engine)
+		return;
 
 	if (index >= engine->context.menu.num_candidates)
-		return false;
+		return;
 
 	bool res = engine->api->select_candidate_on_current_page(engine->sess, index);
 
 	wlpinyin_dbg("select[%d]: %s", index, res ? "true" : "false");
 
 	im_engine_update(engine);
-
-	return res;
 }
 
-bool im_engine_cursor(rime_engine *engine, bool right) {
-	if (engine == NULL || !engine->running)
-		return false;
+void im_engine_cursor(rime_engine *engine, bool right) {
+	if (!engine)
+		return;
 
 	bool res = engine->api->process_key(engine->sess,
 																			right ? XKB_KEY_Right : XKB_KEY_Left, 0);
 	im_engine_update(engine);
 
 	wlpinyin_dbg("cursor[%s]: %d", right ? "right" : "left", res);
-
-	return res;
 }
 
-bool im_engine_delete(rime_engine *engine, bool delete) {
-	if (engine == NULL || !engine->running)
-		return false;
+void im_engine_delete(rime_engine *engine, bool delete) {
+	if (!engine)
+		return;
 
 	bool res = engine->api->process_key(
 			engine->sess, delete ? XKB_KEY_Delete : XKB_KEY_BackSpace, 0);
@@ -261,6 +228,13 @@ bool im_engine_delete(rime_engine *engine, bool delete) {
 	im_engine_update(engine);
 
 	wlpinyin_dbg("delete[%s]: %d", delete ? "delete" : "backspace", res);
+}
 
-	return res;
+void im_engine_reset(rime_engine *engine) {
+	if (!engine)
+		return;
+
+	engine->api->clear_composition(engine->sess);
+	engine->api->commit_composition(engine->sess);
+	im_engine_update(engine);
 }

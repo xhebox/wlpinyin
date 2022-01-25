@@ -30,4 +30,4 @@ protocols_headers=[
 lib_protocols = static_library('protocols', protocols_src + protocols_headers, dependencies: wl_client)
 protocols_dep = declare_dependency(link_with: lib_protocols, sources: protocols_headers)
 
-executable('wlpinyin', ['main.c', 'im.c', 'pinyin_engine.c', 'config.c'], dependencies: [pinyin, xkbcommon, protocols_dep, rt], install: true)
+executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c'], dependencies: [pinyin, xkbcommon, protocols_dep, rt], install: true)
