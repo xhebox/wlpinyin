@@ -307,6 +307,7 @@ static void handle_reset(void *data,
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("reset");
+	state->im_activated = default_activation;
 	im_engine_reset(state->engine);
 }
 
