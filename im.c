@@ -394,6 +394,7 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		goto clean;
 	}
 
+	/*
 	state->popup_surface_wl = wl_compositor_create_surface(state->compositor);
 	if (state->popup_surface_wl == NULL) {
 		wlpinyin_err("failed to create surface");
@@ -406,6 +407,7 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		wlpinyin_err("failed to get popup surface");
 		goto clean;
 	}
+	*/
 
 	static const struct zwp_input_method_v2_listener im_listener = {
 			.activate = handle_reset,
@@ -503,10 +505,12 @@ int im_destroy(struct wlpinyin_state *state) {
 				state->input_method_keyboard_grab);
 	if (state->engine)
 		im_engine_free(state->engine);
+	/*
 	if (state->popup_surface)
 		zwp_input_popup_surface_v2_destroy(state->popup_surface);
 	if (state->popup_surface_wl)
 		wl_surface_destroy(state->popup_surface_wl);
+	*/
 	if (state->virtual_keyboard)
 		zwp_virtual_keyboard_v1_destroy(state->virtual_keyboard);
 	if (state->input_method)

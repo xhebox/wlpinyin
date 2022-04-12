@@ -29,8 +29,10 @@ struct wlpinyin_state {
 	struct zwp_virtual_keyboard_manager_v1 *virtual_keyboard_manager;
 	struct wl_compositor *compositor;
 
+	/*
 	struct wl_surface *popup_surface_wl;
 	struct zwp_input_popup_surface_v2 *popup_surface;
+	*/
 
 	struct zwp_input_method_v2 *input_method;
 	struct zwp_input_method_keyboard_grab_v2 *input_method_keyboard_grab;
