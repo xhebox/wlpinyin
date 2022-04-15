@@ -1,6 +1,5 @@
-project('wlpinyin',['c'])
-
-add_global_arguments(['-Wall'], language : 'c')
+project('wlpinyin',['c'],
+  default_options : ['warning_level=1'])
 
 wl_client = dependency('wayland-client')
 wl_protocols = dependency('wayland-protocols')
