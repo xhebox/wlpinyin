@@ -28,13 +28,13 @@ static int32_t get_miliseconds() {
 }
 
 static void im_send_preedit(struct wlpinyin_state *state, const char *text) {
-	wlpinyin_dbg("send_preedit: %s", text ? text : "");
+	wlpinyin_dbg("upd_preedit: %s", text ? text : "");
 	zwp_input_method_v2_set_preedit_string(state->input_method, text ? text : "",
 																				 0, 0);
 }
 
 static void im_send_text(struct wlpinyin_state *state, const char *text) {
-	wlpinyin_dbg("send_text: %s", text ? text : "");
+	wlpinyin_dbg("upd_text: %s", text ? text : "");
 	zwp_input_method_v2_commit_string(state->input_method, text ? text : "");
 }
 
@@ -52,12 +52,10 @@ static void im_panel_update(struct wlpinyin_state *state) {
 		return;
 	}
 
-	wlpinyin_dbg("preedit: %s", preedit);
 	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "%s <- ", preedit);
 
 	for (int i = 0; i < im_candidate_len; i++) {
 		const char *cand = im_engine_candidate_get(state->engine, i);
-		wlpinyin_dbg("cand[%d]: %s", i + 1, cand);
 		bufptr +=
 				snprintf(&buf[bufptr], sizeof buf - bufptr, " [%d]%s", i + 1, cand);
 	}
@@ -71,97 +69,95 @@ static void im_handle_key(struct wlpinyin_state *state,
 	if (state->xkb_state == NULL)
 		return;
 
+	if (keynode->keysym == XKB_KEY_equal) {
+		keynode->keysym = XKB_KEY_Num_Lock;
+		keynode->keycode = 69;
+	}
+
 	xkb_state_update_key(state->xkb_state, keynode->keycode + 8,
 											 keynode->pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 	bool handled = false;
 
-	bool has_modifiers =
-			xkb_state_mod_names_are_active(
-					state->xkb_state, XKB_STATE_MODS_EFFECTIVE, XKB_STATE_MATCH_ANY,
-					XKB_MOD_NAME_SHIFT, XKB_MOD_NAME_CAPS, XKB_MOD_NAME_CTRL,
-					XKB_MOD_NAME_ALT, XKB_MOD_NAME_NUM, XKB_MOD_NAME_LOGO, NULL) == 1;
-	if (keynode->pressed) {
-		if (state->im_activated) {
-			if (!has_modifiers && strlen(im_engine_preedit_get(state->engine)) != 0) {
-				xkb_keysym_t keysym = keynode->keysym;
-				switch (keysym) {
-				case XKB_KEY_KP_1:
-				case XKB_KEY_KP_2:
-				case XKB_KEY_KP_3:
-				case XKB_KEY_KP_4:
-				case XKB_KEY_KP_5:
-				case XKB_KEY_KP_6:
-				case XKB_KEY_KP_7:
-				case XKB_KEY_KP_8:
-				case XKB_KEY_KP_9:
-					keysym -= XKB_KEY_KP_1;
-					im_engine_candidate_choose(state->engine, keysym);
-					handled = true;
-					break;
-				case XKB_KEY_1:
-				case XKB_KEY_2:
-				case XKB_KEY_3:
-				case XKB_KEY_4:
-				case XKB_KEY_5:
-				case XKB_KEY_6:
-				case XKB_KEY_7:
-				case XKB_KEY_8:
-				case XKB_KEY_9:
-					keysym -= XKB_KEY_1;
-					im_engine_candidate_choose(state->engine, keysym);
-					handled = true;
-					break;
-				case XKB_KEY_space:
-					im_engine_candidate_choose(state->engine, 0);
-					handled = true;
-					break;
-				case XKB_KEY_Right:
-				case XKB_KEY_KP_Right:
-					im_engine_cursor(state->engine, true);
-					handled = true;
-					break;
-				case XKB_KEY_Left:
-				case XKB_KEY_KP_Left:
-					im_engine_cursor(state->engine, false);
-					handled = true;
-					break;
-				case XKB_KEY_UP:
-				case XKB_KEY_KP_Up:
-				case XKB_KEY_Page_Up:
-				case XKB_KEY_KP_Page_Up:
-				case XKB_KEY_equal:
-				case XKB_KEY_KP_Add:
-					im_engine_page(state->engine, true);
-					handled = true;
-					break;
-				case XKB_KEY_DOWN:
-				case XKB_KEY_KP_Down:
-				case XKB_KEY_Page_Down:
-				case XKB_KEY_KP_Page_Down:
-				case XKB_KEY_minus:
-				case XKB_KEY_KP_Subtract:
-					im_engine_page(state->engine, false);
-					handled = true;
-					break;
-				case XKB_KEY_Delete:
-					im_engine_delete(state->engine, true);
-					handled = true;
-					break;
-				case XKB_KEY_BackSpace:
-					im_engine_delete(state->engine, false);
-					handled = true;
-					break;
-				}
+	if (state->im_activated && keynode->pressed) {
+		if (strlen(im_engine_preedit_get(state->engine)) != 0) {
+			xkb_keysym_t keysym = keynode->keysym;
+			switch (keysym) {
+			case XKB_KEY_KP_1:
+			case XKB_KEY_KP_2:
+			case XKB_KEY_KP_3:
+			case XKB_KEY_KP_4:
+			case XKB_KEY_KP_5:
+			case XKB_KEY_KP_6:
+			case XKB_KEY_KP_7:
+			case XKB_KEY_KP_8:
+			case XKB_KEY_KP_9:
+				keysym -= XKB_KEY_KP_1;
+				im_engine_candidate_choose(state->engine, keysym);
+				handled = true;
+				break;
+			case XKB_KEY_1:
+			case XKB_KEY_2:
+			case XKB_KEY_3:
+			case XKB_KEY_4:
+			case XKB_KEY_5:
+			case XKB_KEY_6:
+			case XKB_KEY_7:
+			case XKB_KEY_8:
+			case XKB_KEY_9:
+				keysym -= XKB_KEY_1;
+				im_engine_candidate_choose(state->engine, keysym);
+				handled = true;
+				break;
+			case XKB_KEY_space:
+				im_engine_candidate_choose(state->engine, 0);
+				handled = true;
+				break;
+			case XKB_KEY_Right:
+			case XKB_KEY_KP_Right:
+				im_engine_cursor(state->engine, true);
+				handled = true;
+				break;
+			case XKB_KEY_Left:
+			case XKB_KEY_KP_Left:
+				im_engine_cursor(state->engine, false);
+				handled = true;
+				break;
+			case XKB_KEY_UP:
+			case XKB_KEY_KP_Up:
+			case XKB_KEY_Page_Up:
+			case XKB_KEY_KP_Page_Up:
+			case XKB_KEY_equal:
+			case XKB_KEY_KP_Add:
+				im_engine_page(state->engine, true);
+				handled = true;
+				break;
+			case XKB_KEY_DOWN:
+			case XKB_KEY_KP_Down:
+			case XKB_KEY_Page_Down:
+			case XKB_KEY_KP_Page_Down:
+			case XKB_KEY_minus:
+			case XKB_KEY_KP_Subtract:
+				im_engine_page(state->engine, false);
+				handled = true;
+				break;
+			case XKB_KEY_Delete:
+				im_engine_delete(state->engine, true);
+				handled = true;
+				break;
+			case XKB_KEY_BackSpace:
+				im_engine_delete(state->engine, false);
+				handled = true;
+				break;
 			}
+		}
 
-			if (!handled) {
-				handled = im_engine_key(
-						state->engine, keynode->keysym,
-						xkb_state_serialize_mods(
-								state->xkb_state,
-								XKB_STATE_MODS_EFFECTIVE | XKB_STATE_LAYOUT_EFFECTIVE));
-			}
+		if (!handled) {
+			handled =
+					im_engine_key(state->engine, keynode->keysym,
+												xkb_state_serialize_mods(
+														state->xkb_state, XKB_STATE_MODS_EFFECTIVE |
+																									XKB_STATE_LAYOUT_EFFECTIVE));
 		}
 	}
 
@@ -180,9 +176,29 @@ static void im_handle_key(struct wlpinyin_state *state,
 		if (strlen(commit) != 0)
 			im_send_text(state, commit);
 		zwp_input_method_v2_commit(state->input_method, state->im_serial++);
-	} else {
-		wlpinyin_dbg("send_key: keycode %d, pressed %d", keynode->keycode,
-								 keynode->pressed);
+	}
+
+	bool is_modifier = false;
+	switch (keynode->keysym) {
+	case XKB_KEY_Num_Lock:
+	case XKB_KEY_Caps_Lock:
+	case XKB_KEY_Scroll_Lock:
+	case XKB_KEY_Alt_L:
+	case XKB_KEY_Alt_R:
+	case XKB_KEY_Control_L:
+	case XKB_KEY_Control_R:
+	case XKB_KEY_Shift_L:
+	case XKB_KEY_Shift_R:
+		is_modifier = true;
+	}
+	if (!handled && !is_modifier) {
+#ifndef NDEBUG
+		char buf[512] = {};
+		xkb_keysym_get_name(keynode->keysym, buf, sizeof buf);
+		wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x, %s", buf,
+								 keynode->keycode, keynode->keysym,
+								 keynode->pressed ? "pressed" : "released");
+#endif
 		if (keynode->pressed) {
 			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
 																	keynode->keycode,
@@ -192,8 +208,8 @@ static void im_handle_key(struct wlpinyin_state *state,
 																	keynode->keycode,
 																	WL_KEYBOARD_KEY_STATE_RELEASED);
 		}
-		handled = true;
 	}
+
 	wl_display_flush(state->display);
 }
 
@@ -205,7 +221,7 @@ static void handle_keymap(
 		uint32_t size) {
 	UNUSED(zwp_input_method_keyboard_grab_v2);
 	struct wlpinyin_state *state = data;
-	wlpinyin_dbg("keymap: format %d, size %d, fd %d", format, size, fd);
+	wlpinyin_dbg("ev_keymap: format %d, size %d, fd %d", format, size, fd);
 
 	char *keymap_string = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
 	if (state->xkb_keymap_string != NULL &&
@@ -219,8 +235,6 @@ static void handle_keymap(
 	if (state->xkb_keymap_string != NULL)
 		free(state->xkb_keymap_string);
 
-	state->xkb_keymap = xkb_keymap_new_from_string(
-			state->xkb_context, keymap_string, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
 	state->xkb_keymap_string = strdup(keymap_string);
 	state->xkb_keymap =
 			xkb_keymap_new_from_string(state->xkb_context, state->xkb_keymap_string,
@@ -249,7 +263,8 @@ static void handle_key(
 #ifndef NDEBUG
 	char buf[512] = {};
 	xkb_keysym_get_name(keynode.keysym, buf, sizeof buf);
-	wlpinyin_dbg("key[%s]: serial %d, time %d, %s", buf, serial, time,
+	wlpinyin_dbg("ev_key[%s]: keycode %02x, keysym %02x, serial %d, time %d, %s",
+							 buf, keynode.keycode, keynode.keysym, serial, time,
 							 keynode.pressed ? "pressed" : "released");
 #endif
 
@@ -282,7 +297,7 @@ static void handle_modifiers(
 	UNUSED(zwp_input_method_keyboard_grab_v2);
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg(
-			"modifiers: serial %d, depressed %d, latched %d, locked %d, group %d",
+			"ev_modifiers: serial %d, depressed %d, latched %d, locked %d, group %d",
 			serial, mods_depressed, mods_latched, mods_locked, group);
 	xkb_state_update_mask(state->xkb_state, mods_depressed, mods_latched,
 												mods_locked, 0, 0, group);
@@ -297,7 +312,7 @@ static void handle_repeat_info(
 		int32_t delay) {
 	UNUSED(zwp_input_method_keyboard_grab_v2);
 	struct wlpinyin_state *state = data;
-	wlpinyin_dbg("repeat_info: rate %d, delay %d", rate, delay);
+	wlpinyin_dbg("ev_repeat: rate %d, delay %d", rate, delay);
 	state->im_repeat_delay = (uint32_t)delay;
 	state->im_repeat_rate = (uint32_t)rate;
 }
@@ -306,7 +321,7 @@ static void handle_reset(void *data,
 												 struct zwp_input_method_v2 *zwp_input_method_v2) {
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
-	wlpinyin_dbg("reset");
+	wlpinyin_dbg("ev_reset");
 	state->im_activated = default_activation;
 	im_engine_reset(state->engine);
 }
