@@ -69,11 +69,6 @@ static void im_handle_key(struct wlpinyin_state *state,
 	if (state->xkb_state == NULL)
 		return;
 
-	if (keynode->keysym == XKB_KEY_equal) {
-		keynode->keysym = XKB_KEY_Num_Lock;
-		keynode->keycode = 69;
-	}
-
 	xkb_state_update_key(state->xkb_state, keynode->keycode + 8,
 											 keynode->pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
