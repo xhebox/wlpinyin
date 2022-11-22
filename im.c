@@ -73,6 +73,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 											 keynode->pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 	bool handled = false;
+	bool captured = false;
 
 	if (state->im_activated && keynode->pressed) {
 		if (strlen(im_engine_preedit_get(state->engine)) != 0) {
@@ -89,7 +90,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_KP_9:
 				keysym -= XKB_KEY_KP_1;
 				im_engine_candidate_choose(state->engine, keysym);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_1:
 			case XKB_KEY_2:
@@ -102,21 +103,21 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_9:
 				keysym -= XKB_KEY_1;
 				im_engine_candidate_choose(state->engine, keysym);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_space:
 				im_engine_candidate_choose(state->engine, 0);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_Right:
 			case XKB_KEY_KP_Right:
 				im_engine_cursor(state->engine, true);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_Left:
 			case XKB_KEY_KP_Left:
 				im_engine_cursor(state->engine, false);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_UP:
 			case XKB_KEY_KP_Up:
@@ -125,7 +126,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_equal:
 			case XKB_KEY_KP_Add:
 				im_engine_page(state->engine, true);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_DOWN:
 			case XKB_KEY_KP_Down:
@@ -134,21 +135,21 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_minus:
 			case XKB_KEY_KP_Subtract:
 				im_engine_page(state->engine, false);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_Delete:
 				im_engine_delete(state->engine, true);
-				handled = true;
+				captured = handled = true;
 				break;
 			case XKB_KEY_BackSpace:
 				im_engine_delete(state->engine, false);
-				handled = true;
+				captured = handled = true;
 				break;
 			}
 		}
 
 		if (!handled) {
-			handled =
+			captured = handled =
 					im_engine_key(state->engine, keynode->keysym,
 												xkb_state_serialize_mods(
 														state->xkb_state, XKB_STATE_MODS_EFFECTIVE |
@@ -165,28 +166,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 		}
 	}
 
-	if (handled) {
-		im_panel_update(state);
-		const char *commit = im_engine_commit_text(state->engine);
-		if (strlen(commit) != 0)
-			im_send_text(state, commit);
-		zwp_input_method_v2_commit(state->input_method, state->im_serial++);
-	}
-
-	bool is_modifier = false;
-	switch (keynode->keysym) {
-	case XKB_KEY_Num_Lock:
-	case XKB_KEY_Caps_Lock:
-	case XKB_KEY_Scroll_Lock:
-	case XKB_KEY_Alt_L:
-	case XKB_KEY_Alt_R:
-	case XKB_KEY_Control_L:
-	case XKB_KEY_Control_R:
-	case XKB_KEY_Shift_L:
-	case XKB_KEY_Shift_R:
-		is_modifier = true;
-	}
-	if (!handled && !is_modifier) {
+	if (!captured) {
 #ifndef NDEBUG
 		char buf[512] = {};
 		xkb_keysym_get_name(keynode->keysym, buf, sizeof buf);
@@ -204,6 +184,15 @@ static void im_handle_key(struct wlpinyin_state *state,
 																	WL_KEYBOARD_KEY_STATE_RELEASED);
 		}
 	}
+
+	if (handled) {
+		im_panel_update(state);
+		const char *commit = im_engine_commit_text(state->engine);
+		if (strlen(commit) != 0)
+			im_send_text(state, commit);
+		zwp_input_method_v2_commit(state->input_method, state->im_serial++);
+	}
+
 
 	wl_display_flush(state->display);
 }
