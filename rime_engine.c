@@ -130,7 +130,7 @@ void im_engine_free(rime_engine *engine) {
 	engine->api->free_context(&engine->context);
 	engine->api->free_status(&engine->status);
 	engine->api->destroy_session(engine->sess);
-	engine->api->finalize(&engine->traits);
+	engine->api->finalize();
 	free(engine);
 }
 
