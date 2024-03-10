@@ -230,6 +230,16 @@ void im_engine_delete(rime_engine *engine, bool delete) {
 	wlpinyin_dbg("delete[%s]: %d", delete ? "delete" : "backspace", res);
 }
 
+void im_engine_toggle(rime_engine *engine) {
+	if (!engine)
+		return;
+
+	engine->api->set_option(engine->sess, "ascii_mode",
+													!engine->api->get_option(engine->sess, "ascii_mode"));
+	engine->api->commit_composition(engine->sess);
+	im_engine_update(engine);
+}
+
 void im_engine_reset(rime_engine *engine) {
 	if (!engine)
 		return;

@@ -1,7 +1,5 @@
 #include "wlpinyin.h"
 
-bool default_activation = false;
-
 static xkb_keysym_t records[2];
 bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym, bool pressed) {
 	records[1] = records[0];

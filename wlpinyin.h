@@ -39,7 +39,6 @@ struct wlpinyin_state {
 	struct zwp_virtual_keyboard_v1 *virtual_keyboard;
 
 	uint32_t im_serial;
-	bool im_activated;
 
 	uint32_t im_repeat_delay;
 	uint32_t im_repeat_rate;
@@ -69,6 +68,7 @@ void im_engine_candidate_choose(struct engine *, int);
 void im_engine_page(struct engine *, bool next);
 void im_engine_cursor(struct engine *, bool right);
 void im_engine_delete(struct engine *, bool del);
+void im_engine_toggle(struct engine *);
 void im_engine_reset(struct engine *);
 
 #define wlpinyin_err(fmt, ...) \
