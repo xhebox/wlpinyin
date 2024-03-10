@@ -190,6 +190,7 @@ const char *im_engine_commit_text(rime_engine *engine) {
 	if (!engine)
 		return "";
 	const char *ret = engine->commit.text;
+	im_engine_update(engine);
 	return ret ? ret : "";
 }
 
