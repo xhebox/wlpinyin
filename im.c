@@ -73,9 +73,8 @@ static void im_handle_key(struct wlpinyin_state *state,
 											 keynode->pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 	bool handled = false;
-	bool captured = false;
 
-	if (state->im_activated && keynode->pressed) {
+	if (keynode->pressed) {
 		if (strlen(im_engine_preedit_get(state->engine)) != 0) {
 			xkb_keysym_t keysym = keynode->keysym;
 			switch (keysym) {
@@ -90,7 +89,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_KP_9:
 				keysym -= XKB_KEY_KP_1;
 				im_engine_candidate_choose(state->engine, keysym);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_1:
 			case XKB_KEY_2:
@@ -103,21 +102,21 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_9:
 				keysym -= XKB_KEY_1;
 				im_engine_candidate_choose(state->engine, keysym);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_space:
 				im_engine_candidate_choose(state->engine, 0);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_Right:
 			case XKB_KEY_KP_Right:
 				im_engine_cursor(state->engine, true);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_Left:
 			case XKB_KEY_KP_Left:
 				im_engine_cursor(state->engine, false);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_UP:
 			case XKB_KEY_KP_Up:
@@ -126,7 +125,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_equal:
 			case XKB_KEY_KP_Add:
 				im_engine_page(state->engine, true);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_DOWN:
 			case XKB_KEY_KP_Down:
@@ -135,21 +134,21 @@ static void im_handle_key(struct wlpinyin_state *state,
 			case XKB_KEY_minus:
 			case XKB_KEY_KP_Subtract:
 				im_engine_page(state->engine, false);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_Delete:
 				im_engine_delete(state->engine, true);
-				captured = handled = true;
+				handled = true;
 				break;
 			case XKB_KEY_BackSpace:
 				im_engine_delete(state->engine, false);
-				captured = handled = true;
+				handled = true;
 				break;
 			}
 		}
 
 		if (!handled) {
-			captured = handled =
+			handled =
 					im_engine_key(state->engine, keynode->keysym,
 												xkb_state_serialize_mods(
 														state->xkb_state, XKB_STATE_MODS_EFFECTIVE |
@@ -160,13 +159,12 @@ static void im_handle_key(struct wlpinyin_state *state,
 	if (!handled) {
 		if (im_toggle(state->xkb_state, keynode->keysym, keynode->pressed)) {
 			wlpinyin_dbg("toggle");
-			state->im_activated = !state->im_activated;
-			im_engine_reset(state->engine);
+			im_engine_toggle(state->engine);
 			handled = true;
 		}
 	}
 
-	if (!captured) {
+	if (!handled) {
 #ifndef NDEBUG
 		char buf[512] = {};
 		xkb_keysym_get_name(keynode->keysym, buf, sizeof buf);
@@ -183,16 +181,14 @@ static void im_handle_key(struct wlpinyin_state *state,
 																	keynode->keycode,
 																	WL_KEYBOARD_KEY_STATE_RELEASED);
 		}
+		handled = true;
 	}
 
-	if (handled) {
-		im_panel_update(state);
-		const char *commit = im_engine_commit_text(state->engine);
-		if (strlen(commit) != 0)
-			im_send_text(state, commit);
-		zwp_input_method_v2_commit(state->input_method, state->im_serial++);
-	}
-
+	im_panel_update(state);
+	const char *commit = im_engine_commit_text(state->engine);
+	if (strlen(commit) != 0)
+		im_send_text(state, commit);
+	zwp_input_method_v2_commit(state->input_method, state->im_serial++);
 
 	wl_display_flush(state->display);
 }
@@ -306,7 +302,6 @@ static void handle_reset(void *data,
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("ev_reset");
-	state->im_activated = default_activation;
 	im_engine_reset(state->engine);
 }
 
@@ -339,7 +334,6 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 	}
 	state->signalfd = signalfd;
 	state->display = display;
-	state->im_activated = default_activation;
 
 	{
 		struct wl_registry *registry = wl_display_get_registry(state->display);
