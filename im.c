@@ -188,7 +188,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 	const char *commit = im_engine_commit_text(state->engine);
 	if (strlen(commit) != 0)
 		im_send_text(state, commit);
-	zwp_input_method_v2_commit(state->input_method, state->im_serial++);
+	zwp_input_method_v2_commit(state->input_method, state->im_serial);
 
 	wl_display_flush(state->display);
 }
@@ -305,6 +305,13 @@ static void handle_reset(void *data,
 	im_engine_reset(state->engine);
 }
 
+static void handle_done(void *data,
+												struct zwp_input_method_v2 *zwp_input_method_v2) {
+	UNUSED(zwp_input_method_v2);
+	struct wlpinyin_state *state = data;
+	state->im_serial++;
+}
+
 static void handle_global(void *data,
 													struct wl_registry *registry,
 													uint32_t name,
@@ -358,7 +365,7 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		goto clean;
 	}
 
-	state->im_serial = 1;
+	state->im_serial = 0;
 
 	state->engine = im_engine_new();
 	if (state->engine == NULL) {
@@ -408,7 +415,7 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 			.surrounding_text = noop,
 			.text_change_cause = noop,
 			.content_type = noop,
-			.done = noop,
+			.done = handle_done,
 			.unavailable = handle_reset,
 	};
 	zwp_input_method_v2_add_listener(state->input_method, &im_listener, state);
