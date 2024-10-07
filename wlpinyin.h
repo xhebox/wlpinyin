@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <time.h>
 #include <wayland-client.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -59,15 +58,26 @@ int im_destroy(struct wlpinyin_state *state);
 struct engine *im_engine_new();
 void im_engine_free(struct engine *);
 
-bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
-const char *im_engine_preedit_get(struct engine *);
-int im_engine_candidate_len(struct engine *);
+bool im_engine_bypass(struct engine *);
+int im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
+
+typedef struct predit {
+	int cursor;
+	int start;
+	int end;
+	char *text;
+} preedit_t;
+
+typedef struct candidate {
+	int page_no;
+	int highlighted_candidate_index;
+	int num_candidates;
+} candidate_t;
+
+preedit_t im_engine_preedit(struct engine *);
+candidate_t im_engine_candidate(struct engine *);
 const char *im_engine_candidate_get(struct engine *, int);
 const char *im_engine_commit_text(struct engine *);
-void im_engine_candidate_choose(struct engine *, int);
-void im_engine_page(struct engine *, bool next);
-void im_engine_cursor(struct engine *, bool right);
-void im_engine_delete(struct engine *, bool del);
 void im_engine_toggle(struct engine *);
 void im_engine_reset(struct engine *);
 
@@ -76,7 +86,7 @@ void im_engine_reset(struct engine *);
 
 #ifndef NDEBUG
 #define wlpinyin_dbg(fmt, ...) \
-	fprintf(stderr, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+	fprintf(stderr, " [%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #else
 #define wlpinyin_dbg(fmt, ...)
 #endif

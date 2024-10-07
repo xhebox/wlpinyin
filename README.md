@@ -33,7 +33,7 @@ With the default config, you can press left Control to switch between normal and
 When in pinyin mode, start typing a word, if the program you are using is supported, an inline selector will appear.
 For instance, with the input `ta` you will get:
 ```
-ta <-  [1]他 [2]她 [3]它 [4]塔 [5]牠
+[0] <|fen> [1 份] 2 分 3 纷 4 奋 5 愤
 ```
 Rime will automatically order characters in the order in which you most use them, so your exact prompt may vary.
 

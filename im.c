@@ -1,4 +1,3 @@
-#include <errno.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -10,7 +9,9 @@
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
+#include <wayland-client-protocol.h>
 
+#include "input-method-unstable-v2-client-protocol.h"
 #include "wlpinyin.h"
 
 #define MIN(a, b) (a < b ? a : b)
@@ -41,24 +42,41 @@ static void im_send_text(struct wlpinyin_state *state, const char *text) {
 static void noop() {}
 
 static void im_panel_update(struct wlpinyin_state *state) {
-	char buf[512] = {};
+	char buf[2048] = {};
 	int bufptr = 0;
 
-	int im_candidate_len = im_engine_candidate_len(state->engine);
-
-	const char *preedit = im_engine_preedit_get(state->engine);
-	if (strlen(preedit) == 0) {
+	preedit_t preedit = im_engine_preedit(state->engine);
+	if (!preedit.text) {
 		im_send_preedit(state, "");
 		return;
 	}
 
-	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "%s <- ", preedit);
+	candidate_t cand = im_engine_candidate(state->engine);
+	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "[%d] ", cand.page_no);
 
-	for (int i = 0; i < im_candidate_len; i++) {
-		const char *cand = im_engine_candidate_get(state->engine, i);
-		bufptr +=
-				snprintf(&buf[bufptr], sizeof buf - bufptr, " [%d]%s", i + 1, cand);
+	int preedit_len = strlen(preedit.text);
+	for (int i = 0; i <= preedit_len; i++) {
+		if (preedit.start < preedit.end) {
+			if (i == preedit.start)
+				bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "<");
+			else if (i == preedit.end)
+				bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, ">");
+		}
+		if (i == preedit.cursor)
+			bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
+		if (i < preedit_len)
+			bufptr +=
+					snprintf(&buf[bufptr], sizeof buf - bufptr, "%c", preedit.text[i]);
 	}
+
+	for (int i = 0; i < cand.num_candidates; i++) {
+		bool highlighted = i == cand.highlighted_candidate_index;
+		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, " %s%d %s%s",
+											 highlighted ? "[" : "", i + 1,
+											 im_engine_candidate_get(state->engine, i),
+											 highlighted ? "]" : "");
+	}
+
 	buf[bufptr] = 0;
 
 	im_send_preedit(state, buf);
@@ -74,97 +92,22 @@ static void im_handle_key(struct wlpinyin_state *state,
 
 	bool handled = false;
 
-	if (keynode->pressed) {
-		if (strlen(im_engine_preedit_get(state->engine)) != 0) {
-			xkb_keysym_t keysym = keynode->keysym;
-			switch (keysym) {
-			case XKB_KEY_KP_1:
-			case XKB_KEY_KP_2:
-			case XKB_KEY_KP_3:
-			case XKB_KEY_KP_4:
-			case XKB_KEY_KP_5:
-			case XKB_KEY_KP_6:
-			case XKB_KEY_KP_7:
-			case XKB_KEY_KP_8:
-			case XKB_KEY_KP_9:
-				keysym -= XKB_KEY_KP_1;
-				im_engine_candidate_choose(state->engine, keysym);
-				handled = true;
-				break;
-			case XKB_KEY_1:
-			case XKB_KEY_2:
-			case XKB_KEY_3:
-			case XKB_KEY_4:
-			case XKB_KEY_5:
-			case XKB_KEY_6:
-			case XKB_KEY_7:
-			case XKB_KEY_8:
-			case XKB_KEY_9:
-				keysym -= XKB_KEY_1;
-				im_engine_candidate_choose(state->engine, keysym);
-				handled = true;
-				break;
-			case XKB_KEY_space:
-				im_engine_candidate_choose(state->engine, 0);
-				handled = true;
-				break;
-			case XKB_KEY_Right:
-			case XKB_KEY_KP_Right:
-				im_engine_cursor(state->engine, true);
-				handled = true;
-				break;
-			case XKB_KEY_Left:
-			case XKB_KEY_KP_Left:
-				im_engine_cursor(state->engine, false);
-				handled = true;
-				break;
-			case XKB_KEY_UP:
-			case XKB_KEY_KP_Up:
-			case XKB_KEY_Page_Up:
-			case XKB_KEY_KP_Page_Up:
-			case XKB_KEY_equal:
-			case XKB_KEY_KP_Add:
-				im_engine_page(state->engine, true);
-				handled = true;
-				break;
-			case XKB_KEY_DOWN:
-			case XKB_KEY_KP_Down:
-			case XKB_KEY_Page_Down:
-			case XKB_KEY_KP_Page_Down:
-			case XKB_KEY_minus:
-			case XKB_KEY_KP_Subtract:
-				im_engine_page(state->engine, false);
-				handled = true;
-				break;
-			case XKB_KEY_Delete:
-				im_engine_delete(state->engine, true);
-				handled = true;
-				break;
-			case XKB_KEY_BackSpace:
-				im_engine_delete(state->engine, false);
-				handled = true;
-				break;
-			}
-		}
-
-		if (!handled) {
-			handled =
-					im_engine_key(state->engine, keynode->keysym,
-												xkb_state_serialize_mods(
-														state->xkb_state, XKB_STATE_MODS_EFFECTIVE |
-																									XKB_STATE_LAYOUT_EFFECTIVE));
-		}
+	if (!handled &&
+			im_toggle(state->xkb_state, keynode->keysym, keynode->pressed)) {
+		wlpinyin_err("toggle");
+		im_engine_toggle(state->engine);
+		handled = true;
 	}
 
-	if (!handled) {
-		if (im_toggle(state->xkb_state, keynode->keysym, keynode->pressed)) {
-			wlpinyin_dbg("toggle");
-			im_engine_toggle(state->engine);
-			handled = true;
-		}
+	if (!handled && keynode->pressed) {
+		handled =
+				im_engine_key(state->engine, keynode->keysym,
+											xkb_state_serialize_mods(state->xkb_state,
+																							 XKB_STATE_MODS_EFFECTIVE |
+																									 XKB_STATE_LAYOUT_EFFECTIVE));
 	}
 
-	if (!handled) {
+	if (!handled && im_engine_bypass(state->engine)) {
 #ifndef NDEBUG
 		char buf[512] = {};
 		xkb_keysym_get_name(keynode->keysym, buf, sizeof buf);
@@ -172,23 +115,18 @@ static void im_handle_key(struct wlpinyin_state *state,
 								 keynode->keycode, keynode->keysym,
 								 keynode->pressed ? "pressed" : "released");
 #endif
-		if (keynode->pressed) {
-			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
-																	keynode->keycode,
-																	WL_KEYBOARD_KEY_STATE_PRESSED);
-		} else {
-			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
-																	keynode->keycode,
-																	WL_KEYBOARD_KEY_STATE_RELEASED);
-		}
-		handled = true;
-	}
+		zwp_virtual_keyboard_v1_key(
+				state->virtual_keyboard, get_miliseconds(), keynode->keycode,
+				keynode->pressed ? WL_KEYBOARD_KEY_STATE_PRESSED
+												 : WL_KEYBOARD_KEY_STATE_RELEASED);
+	} else {
+		im_panel_update(state);
+		const char *commit = im_engine_commit_text(state->engine);
+		if (strlen(commit) != 0)
+			im_send_text(state, commit);
 
-	im_panel_update(state);
-	const char *commit = im_engine_commit_text(state->engine);
-	if (strlen(commit) != 0)
-		im_send_text(state, commit);
-	zwp_input_method_v2_commit(state->input_method, state->im_serial);
+		zwp_input_method_v2_commit(state->input_method, state->im_serial);
+	}
 
 	wl_display_flush(state->display);
 }
