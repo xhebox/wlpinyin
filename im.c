@@ -87,9 +87,6 @@ static void im_handle_key(struct wlpinyin_state *state,
 	if (state->xkb_state == NULL)
 		return;
 
-	xkb_state_update_key(state->xkb_state, keynode->keycode + 8,
-											 keynode->pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
-
 	bool handled = false;
 
 	if (!handled &&
@@ -178,6 +175,9 @@ static void handle_key(
 	keynode.keysym = xkb_state_key_get_one_sym(state->xkb_state, key + 8);
 	keynode.pressed = kstate == WL_KEYBOARD_KEY_STATE_PRESSED;
 
+	xkb_state_update_key(state->xkb_state, keynode.keycode + 8,
+											 keynode.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
+
 #ifndef NDEBUG
 	char buf[512] = {};
 	xkb_keysym_get_name(keynode.keysym, buf, sizeof buf);
@@ -187,14 +187,15 @@ static void handle_key(
 #endif
 
 	// reset repeat key
-	if (keynode.pressed &&
-			xkb_keymap_key_repeats(state->xkb_keymap, keynode.keycode + 8) == 1) {
-		state->im_repeat_key = keynode.keycode;
-		struct itimerspec timer = {
-				.it_value = {.tv_nsec = state->im_repeat_delay * 1000000},
-				.it_interval = {.tv_nsec = 1000000000 / state->im_repeat_rate},
-		};
-		timerfd_settime(state->timerfd, 0, &timer, NULL);
+	if (keynode.pressed) {
+		if (xkb_keymap_key_repeats(state->xkb_keymap, keynode.keycode + 8) == 1) {
+			state->im_repeat_key = keynode.keycode;
+			struct itimerspec timer = {
+					.it_value = {.tv_nsec = state->im_repeat_delay * 1000000},
+					.it_interval = {.tv_nsec = 1000000000 / state->im_repeat_rate},
+			};
+			timerfd_settime(state->timerfd, 0, &timer, NULL);
+		}
 	} else {
 		struct itimerspec timer = {};
 		timerfd_settime(state->timerfd, 0, &timer, NULL);
