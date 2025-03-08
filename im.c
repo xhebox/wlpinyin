@@ -197,6 +197,7 @@ static void handle_key(
 			timerfd_settime(state->timerfd, 0, &timer, NULL);
 		}
 	} else {
+		state->im_repeat_key = UINT32_MAX;
 		struct itimerspec timer = {};
 		timerfd_settime(state->timerfd, 0, &timer, NULL);
 	}
@@ -402,7 +403,6 @@ int im_loop(struct wlpinyin_state *state) {
 
 	while (running && poll(fds, sizeof fds / sizeof fds[fd_wayland], -1) != -1) {
 		if (fds[fd_signal].revents & POLLIN) {
-			fds[fd_signal].revents = 0;
 			struct signalfd_siginfo info = {};
 			read(fds[fd_signal].fd, &info, sizeof(info));
 			switch (info.ssi_signo) {
@@ -413,12 +413,13 @@ int im_loop(struct wlpinyin_state *state) {
 			}
 			wlpinyin_dbg("signal: %d, running: %d", info.ssi_signo, running);
 		} else if (fds[fd_wayland].revents & POLLIN) {
-			fds[fd_wayland].revents = 0;
 			if (wl_display_roundtrip(state->display) == -1) {
 				break;
 			}
 		} else if (fds[fd_repeat].revents & POLLIN) {
-			fds[fd_repeat].revents = 0;
+			if (state->im_repeat_key == UINT32_MAX)
+				continue;
+
 			uint64_t tick;
 			read(fds[fd_repeat].fd, &tick, sizeof tick);
 			struct wlpinyin_key keynode = {
