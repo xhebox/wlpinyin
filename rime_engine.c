@@ -147,16 +147,15 @@ preedit_t im_engine_preedit(rime_engine *engine) {
 	return res;
 }
 
-int im_engine_key(rime_engine *engine,
-									xkb_keysym_t keycode,
-									xkb_mod_mask_t mods) {
+bool im_engine_key(rime_engine *engine,
+									 xkb_keysym_t keycode,
+									 xkb_mod_mask_t mods) {
 	if (!engine)
 		return false;
 
 	bool res = engine->api->process_key(engine->sess, keycode, mods);
 
 	im_engine_update(engine);
-
 	return res;
 }
 
@@ -193,11 +192,18 @@ const char *im_engine_commit_text(rime_engine *engine) {
 	return ret ? ret : "";
 }
 
-bool im_engine_bypass(rime_engine *engine) {
+bool im_engine_composing(rime_engine *engine) {
 	if (!engine)
 		return false;
 
-	return !engine->status.is_composing || engine->status.is_ascii_mode;
+	return engine->status.is_composing;
+}
+
+bool im_engine_activated(rime_engine *engine) {
+	if (!engine)
+		return false;
+
+	return !engine->status.is_ascii_mode;
 }
 
 void im_engine_toggle(rime_engine *engine) {

@@ -17,7 +17,8 @@
 #define MIN(a, b) (a < b ? a : b)
 
 struct wlpinyin_key {
-	xkb_keysym_t keysym;
+	xkb_keysym_t xkb_keysym;
+	xkb_keycode_t xkb_keycode;
 	uint32_t keycode;
 	bool pressed;
 };
@@ -87,42 +88,38 @@ static void im_handle_key(struct wlpinyin_state *state,
 	if (state->xkb_state == NULL)
 		return;
 
-	bool handled = false;
-
-	if (!handled &&
-			im_toggle(state->xkb_state, keynode->keysym, keynode->pressed)) {
+	if (im_toggle(state->xkb_state, keynode->xkb_keysym, keynode->pressed)) {
 		wlpinyin_err("toggle");
 		im_engine_toggle(state->engine);
-		handled = true;
 	}
 
-	if (!handled && keynode->pressed) {
-		handled =
-				im_engine_key(state->engine, keynode->keysym,
+	if (keynode->pressed) {
+		bool handled =
+				im_engine_key(state->engine, keynode->xkb_keysym,
 											xkb_state_serialize_mods(state->xkb_state,
 																							 XKB_STATE_MODS_EFFECTIVE |
 																									 XKB_STATE_LAYOUT_EFFECTIVE));
-	}
-
-	if (!handled && im_engine_bypass(state->engine)) {
+		if (!handled) {
 #ifndef NDEBUG
-		char buf[512] = {};
-		xkb_keysym_get_name(keynode->keysym, buf, sizeof buf);
-		wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x, %s", buf,
-								 keynode->keycode, keynode->keysym,
-								 keynode->pressed ? "pressed" : "released");
+			char buf[512] = {};
+			xkb_keysym_get_name(keynode->xkb_keysym, buf, sizeof buf);
+			wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x", buf,
+									 keynode->xkb_keycode, keynode->xkb_keysym);
 #endif
-		zwp_virtual_keyboard_v1_key(
-				state->virtual_keyboard, get_miliseconds(), keynode->keycode,
-				keynode->pressed ? WL_KEYBOARD_KEY_STATE_PRESSED
-												 : WL_KEYBOARD_KEY_STATE_RELEASED);
-	} else {
-		im_panel_update(state);
-		const char *commit = im_engine_commit_text(state->engine);
-		if (strlen(commit) != 0)
-			im_send_text(state, commit);
+			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
+																	keynode->keycode,
+																	WL_KEYBOARD_KEY_STATE_PRESSED);
+			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
+																	keynode->keycode,
+																	WL_KEYBOARD_KEY_STATE_RELEASED);
+		} else {
+			im_panel_update(state);
+			const char *commit = im_engine_commit_text(state->engine);
+			if (strlen(commit) != 0)
+				im_send_text(state, commit);
 
-		zwp_input_method_v2_commit(state->input_method, state->im_serial);
+			zwp_input_method_v2_commit(state->input_method, state->im_serial);
+		}
 	}
 
 	wl_display_flush(state->display);
@@ -172,30 +169,31 @@ static void handle_key(
 
 	struct wlpinyin_key keynode = {};
 	keynode.keycode = key;
-	keynode.keysym = xkb_state_key_get_one_sym(state->xkb_state, key + 8);
+	keynode.xkb_keycode = key + 8;
+	keynode.xkb_keysym =
+			xkb_state_key_get_one_sym(state->xkb_state, keynode.xkb_keycode);
 	keynode.pressed = kstate == WL_KEYBOARD_KEY_STATE_PRESSED;
 
-	xkb_state_update_key(state->xkb_state, keynode.keycode + 8,
+	xkb_state_update_key(state->xkb_state, keynode.xkb_keycode,
 											 keynode.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 #ifndef NDEBUG
 	char buf[512] = {};
-	xkb_keysym_get_name(keynode.keysym, buf, sizeof buf);
+	xkb_keysym_get_name(keynode.xkb_keysym, buf, sizeof buf);
 	wlpinyin_dbg("ev_key[%s]: keycode %02x, keysym %02x, serial %d, time %d, %s",
-							 buf, keynode.keycode, keynode.keysym, serial, time,
+							 buf, keynode.xkb_keycode, keynode.xkb_keysym, serial, time,
 							 keynode.pressed ? "pressed" : "released");
 #endif
 
 	// reset repeat key
-	if (keynode.pressed) {
-		if (xkb_keymap_key_repeats(state->xkb_keymap, keynode.keycode + 8) == 1) {
-			state->im_repeat_key = keynode.keycode;
-			struct itimerspec timer = {
-					.it_value = {.tv_nsec = state->im_repeat_delay * 1000000},
-					.it_interval = {.tv_nsec = 1000000000 / state->im_repeat_rate},
-			};
-			timerfd_settime(state->timerfd, 0, &timer, NULL);
-		}
+	if (keynode.pressed &&
+			xkb_keymap_key_repeats(state->xkb_keymap, keynode.xkb_keycode) == 1) {
+		state->im_repeat_key = key;
+		struct itimerspec timer = {
+				.it_value = {.tv_nsec = state->im_repeat_delay * 1000000},
+				.it_interval = {.tv_nsec = 1000000000 / state->im_repeat_rate},
+		};
+		timerfd_settime(state->timerfd, 0, &timer, NULL);
 	} else {
 		state->im_repeat_key = UINT32_MAX;
 		struct itimerspec timer = {};
@@ -217,7 +215,8 @@ static void handle_modifiers(
 	UNUSED(zwp_input_method_keyboard_grab_v2);
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg(
-			"ev_modifiers: serial %d, depressed %d, latched %d, locked %d, group %d",
+			"ev_modifiers: serial %d, depressed %d, latched %d, locked %d, group "
+			"%d",
 			serial, mods_depressed, mods_latched, mods_locked, group);
 	xkb_state_update_mask(state->xkb_state, mods_depressed, mods_latched,
 												mods_locked, 0, 0, group);
@@ -417,17 +416,20 @@ int im_loop(struct wlpinyin_state *state) {
 				break;
 			}
 		} else if (fds[fd_repeat].revents & POLLIN) {
-			if (state->im_repeat_key == UINT32_MAX)
-				continue;
-
 			uint64_t tick;
 			read(fds[fd_repeat].fd, &tick, sizeof tick);
 			struct wlpinyin_key keynode = {
 					.keycode = state->im_repeat_key,
-					.keysym = xkb_state_key_get_one_sym(state->xkb_state,
-																							state->im_repeat_key + 8),
+					.xkb_keycode = state->im_repeat_key + 8,
+					.xkb_keysym = xkb_state_key_get_one_sym(state->xkb_state,
+																									state->im_repeat_key + 8),
 			};
 			for (; tick != 0; tick--) {
+				// repeat may be stopped if there are new events
+				if (wl_display_roundtrip(state->display) == -1)
+					break;
+				if (keynode.keycode == UINT32_MAX)
+					break;
 				keynode.pressed = true;
 				im_handle_key(state, &keynode);
 				keynode.pressed = false;
