@@ -248,6 +248,7 @@ static void handle_reset(void *data,
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("ev_reset");
 	im_engine_reset(state->engine);
+	im_panel_update(state);
 }
 
 static void handle_done(void *data,
