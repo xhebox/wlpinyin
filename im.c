@@ -88,9 +88,11 @@ static void im_handle_key(struct wlpinyin_state *state,
 	if (state->xkb_state == NULL)
 		return;
 
+	bool update = false;
 	if (im_toggle(state->xkb_state, keynode->xkb_keysym, keynode->pressed)) {
 		wlpinyin_err("toggle");
 		im_engine_toggle(state->engine);
+		update = true;
 	}
 
 	if (keynode->pressed) {
@@ -113,13 +115,17 @@ static void im_handle_key(struct wlpinyin_state *state,
 																	keynode->keycode,
 																	WL_KEYBOARD_KEY_STATE_RELEASED);
 		} else {
-			im_panel_update(state);
-			const char *commit = im_engine_commit_text(state->engine);
-			if (strlen(commit) != 0)
-				im_send_text(state, commit);
-
-			zwp_input_method_v2_commit(state->input_method, state->im_serial);
+			update = true;
 		}
+	}
+
+	if (update) {
+		im_panel_update(state);
+		const char *commit = im_engine_commit_text(state->engine);
+		if (strlen(commit) != 0)
+			im_send_text(state, commit);
+
+		zwp_input_method_v2_commit(state->input_method, state->im_serial);
 	}
 
 	wl_display_flush(state->display);
