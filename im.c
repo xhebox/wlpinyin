@@ -254,6 +254,10 @@ static void handle_deactivate(void *data,
 		state->input_method_keyboard_grab = NULL;
 	}
 
+	state->im_repeat_key = UINT32_MAX;
+	struct itimerspec timer = {};
+	timerfd_settime(state->timerfd, 0, &timer, NULL);
+
 	im_engine_reset(state->engine);
 	im_panel_update(state);
 }
