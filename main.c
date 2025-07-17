@@ -1,10 +1,8 @@
 #include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/signalfd.h>
 #include <sys/timerfd.h>
 #include <unistd.h>

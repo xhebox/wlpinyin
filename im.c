@@ -85,7 +85,7 @@ static void im_panel_update(struct wlpinyin_state *state) {
 
 static void im_handle_key(struct wlpinyin_state *state,
 													struct wlpinyin_key *keynode) {
-	if (state->xkb_state == NULL)
+	if (state->xkb_state == NULL || state->xkb_keymap_string == NULL)
 		return;
 
 	bool update = false;
@@ -95,28 +95,30 @@ static void im_handle_key(struct wlpinyin_state *state,
 		update = true;
 	}
 
+	bool handled = false;
 	if (keynode->pressed) {
-		bool handled =
+		handled =
 				im_engine_key(state->engine, keynode->xkb_keysym,
 											xkb_state_serialize_mods(state->xkb_state,
 																							 XKB_STATE_MODS_EFFECTIVE |
 																									 XKB_STATE_LAYOUT_EFFECTIVE));
-		if (!handled) {
+	}
+
+	if (!handled) {
 #ifndef NDEBUG
-			char buf[512] = {};
-			xkb_keysym_get_name(keynode->xkb_keysym, buf, sizeof buf);
-			wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x", buf,
-									 keynode->xkb_keycode, keynode->xkb_keysym);
+		char buf[512] = {};
+		xkb_keysym_get_name(keynode->xkb_keysym, buf, sizeof buf);
+		wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x, %s", buf,
+								 keynode->xkb_keycode, keynode->xkb_keysym,
+								 keynode->pressed ? "pressed" : "released");
 #endif
-			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
-																	keynode->keycode,
-																	WL_KEYBOARD_KEY_STATE_PRESSED);
-			zwp_virtual_keyboard_v1_key(state->virtual_keyboard, get_miliseconds(),
-																	keynode->keycode,
-																	WL_KEYBOARD_KEY_STATE_RELEASED);
-		} else {
-			update = true;
-		}
+
+		zwp_virtual_keyboard_v1_key(
+				state->virtual_keyboard, get_miliseconds(), keynode->keycode,
+				keynode->pressed ? WL_KEYBOARD_KEY_STATE_PRESSED
+												 : WL_KEYBOARD_KEY_STATE_RELEASED);
+	} else {
+		update = true;
 	}
 
 	if (update) {
@@ -254,6 +256,11 @@ static void handle_deactivate(void *data,
 		state->input_method_keyboard_grab = NULL;
 	}
 
+	if (state->xkb_keymap_string != NULL) {
+		free(state->xkb_keymap_string);
+		state->xkb_keymap_string = NULL;
+	}
+
 	state->im_repeat_key = UINT32_MAX;
 	struct itimerspec timer = {};
 	timerfd_settime(state->timerfd, 0, &timer, NULL);
@@ -274,6 +281,11 @@ static void handle_activate(void *data,
 		state->input_method_keyboard_grab = NULL;
 	}
 
+	if (state->xkb_keymap_string != NULL) {
+		free(state->xkb_keymap_string);
+		state->xkb_keymap_string = NULL;
+	}
+
 	state->input_method_keyboard_grab =
 			zwp_input_method_v2_grab_keyboard(state->input_method);
 	static const struct zwp_input_method_keyboard_grab_v2_listener
@@ -287,7 +299,6 @@ static void handle_activate(void *data,
 			state->input_method_keyboard_grab, &im_activate_listener, state);
 
 	im_engine_reset(state->engine);
-	im_panel_update(state);
 }
 
 static void handle_done(void *data,
@@ -447,7 +458,7 @@ int im_loop(struct wlpinyin_state *state) {
 			wlpinyin_dbg("signal: %d, running: %d", info.ssi_signo, running);
 		} else if (fds[fd_wayland].revents & POLLIN) {
 			if (wl_display_roundtrip(state->display) == -1) {
-				break;
+				return -1;
 			}
 		} else if (fds[fd_repeat].revents & POLLIN) {
 			uint64_t tick;
