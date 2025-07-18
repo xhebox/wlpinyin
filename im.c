@@ -6,12 +6,9 @@
 #include <sys/mman.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
-#include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
-#include <wayland-client-protocol.h>
 
-#include "input-method-unstable-v2-client-protocol.h"
 #include "wlpinyin.h"
 
 #define MIN(a, b) (a < b ? a : b)
@@ -85,23 +82,32 @@ static void im_panel_update(struct wlpinyin_state *state) {
 
 static void im_handle_key(struct wlpinyin_state *state,
 													struct wlpinyin_key *keynode) {
-	if (state->xkb_state == NULL || state->xkb_keymap_string == NULL)
+	if (state->xkb_state == NULL)
 		return;
 
-	bool update = false;
-	if (im_toggle(state->xkb_state, keynode->xkb_keysym, keynode->pressed)) {
-		wlpinyin_err("toggle");
-		im_engine_toggle(state->engine);
-		update = true;
-	}
-
 	bool handled = false;
-	if (keynode->pressed) {
-		handled =
-				im_engine_key(state->engine, keynode->xkb_keysym,
-											xkb_state_serialize_mods(state->xkb_state,
-																							 XKB_STATE_MODS_EFFECTIVE |
-																									 XKB_STATE_LAYOUT_EFFECTIVE));
+	if (state->im_activated) {
+		if (im_toggle(state->xkb_state, keynode->xkb_keysym, keynode->pressed)) {
+			im_engine_toggle(state->engine);
+			handled = true;
+		}
+
+		if (!handled && keynode->pressed) {
+			handled =
+					im_engine_key(state->engine, keynode->xkb_keysym,
+												xkb_state_serialize_mods(
+														state->xkb_state, XKB_STATE_MODS_EFFECTIVE |
+																									XKB_STATE_LAYOUT_EFFECTIVE));
+		}
+
+		if (handled) {
+			im_panel_update(state);
+			const char *commit = im_engine_commit_text(state->engine);
+			if (strlen(commit) != 0)
+				im_send_text(state, commit);
+
+			zwp_input_method_v2_commit(state->input_method, state->im_serial);
+		}
 	}
 
 	if (!handled) {
@@ -117,17 +123,6 @@ static void im_handle_key(struct wlpinyin_state *state,
 				state->virtual_keyboard, get_miliseconds(), keynode->keycode,
 				keynode->pressed ? WL_KEYBOARD_KEY_STATE_PRESSED
 												 : WL_KEYBOARD_KEY_STATE_RELEASED);
-	} else {
-		update = true;
-	}
-
-	if (update) {
-		im_panel_update(state);
-		const char *commit = im_engine_commit_text(state->engine);
-		if (strlen(commit) != 0)
-			im_send_text(state, commit);
-
-		zwp_input_method_v2_commit(state->input_method, state->im_serial);
 	}
 
 	wl_display_flush(state->display);
@@ -162,6 +157,7 @@ static void handle_keymap(
 	state->xkb_state = xkb_state_new(state->xkb_keymap);
 
 	munmap(keymap_string, size);
+
 	zwp_virtual_keyboard_v1_keymap(state->virtual_keyboard, format, fd, size);
 }
 
@@ -193,21 +189,6 @@ static void handle_key(
 							 keynode.pressed ? "pressed" : "released");
 #endif
 
-	// reset repeat key
-	if (keynode.pressed &&
-			xkb_keymap_key_repeats(state->xkb_keymap, keynode.xkb_keycode) == 1) {
-		state->im_repeat_key = key;
-		struct itimerspec timer = {
-				.it_value = {.tv_nsec = state->im_repeat_delay * 1000000},
-				.it_interval = {.tv_nsec = 1000000000 / state->im_repeat_rate},
-		};
-		timerfd_settime(state->timerfd, 0, &timer, NULL);
-	} else {
-		state->im_repeat_key = UINT32_MAX;
-		struct itimerspec timer = {};
-		timerfd_settime(state->timerfd, 0, &timer, NULL);
-	}
-
 	// handle it
 	im_handle_key(state, &keynode);
 }
@@ -232,41 +213,13 @@ static void handle_modifiers(
 																		mods_latched, mods_locked, group);
 }
 
-static void handle_repeat_info(
-		void *data,
-		struct zwp_input_method_keyboard_grab_v2 *zwp_input_method_keyboard_grab_v2,
-		int32_t rate,
-		int32_t delay) {
-	UNUSED(zwp_input_method_keyboard_grab_v2);
-	struct wlpinyin_state *state = data;
-	wlpinyin_dbg("ev_repeat: rate %d, delay %d", rate, delay);
-	state->im_repeat_delay = (uint32_t)delay;
-	state->im_repeat_rate = (uint32_t)rate;
-}
-
 static void handle_deactivate(void *data,
 															struct zwp_input_method_v2 *zwp_input_method_v2) {
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("ev_deactive");
-
-	if (state->input_method_keyboard_grab != NULL) {
-		zwp_input_method_keyboard_grab_v2_release(
-				state->input_method_keyboard_grab);
-		state->input_method_keyboard_grab = NULL;
-	}
-
-	if (state->xkb_keymap_string != NULL) {
-		free(state->xkb_keymap_string);
-		state->xkb_keymap_string = NULL;
-	}
-
-	state->im_repeat_key = UINT32_MAX;
-	struct itimerspec timer = {};
-	timerfd_settime(state->timerfd, 0, &timer, NULL);
-
 	im_engine_reset(state->engine);
-	im_panel_update(state);
+	state->im_activated = false;
 }
 
 static void handle_activate(void *data,
@@ -274,31 +227,8 @@ static void handle_activate(void *data,
 	UNUSED(zwp_input_method_v2);
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("ev_active");
-
-	if (state->input_method_keyboard_grab != NULL) {
-		zwp_input_method_keyboard_grab_v2_release(
-				state->input_method_keyboard_grab);
-		state->input_method_keyboard_grab = NULL;
-	}
-
-	if (state->xkb_keymap_string != NULL) {
-		free(state->xkb_keymap_string);
-		state->xkb_keymap_string = NULL;
-	}
-
-	state->input_method_keyboard_grab =
-			zwp_input_method_v2_grab_keyboard(state->input_method);
-	static const struct zwp_input_method_keyboard_grab_v2_listener
-			im_activate_listener = {
-					.keymap = handle_keymap,
-					.key = handle_key,
-					.modifiers = handle_modifiers,
-					.repeat_info = handle_repeat_info,
-			};
-	zwp_input_method_keyboard_grab_v2_add_listener(
-			state->input_method_keyboard_grab, &im_activate_listener, state);
-
 	im_engine_reset(state->engine);
+	state->im_activated = true;
 }
 
 static void handle_done(void *data,
@@ -355,12 +285,6 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		}
 	}
 
-	state->timerfd = timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
-	if (state->timerfd == -1) {
-		wlpinyin_err("failed to setup event timer");
-		goto clean;
-	}
-
 	state->im_serial = 0;
 
 	state->engine = im_engine_new();
@@ -375,18 +299,31 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		goto clean;
 	}
 
+	state->input_method = zwp_input_method_manager_v2_get_input_method(
+			state->input_method_manager, state->seat);
+	if (state->input_method == NULL) {
+		wlpinyin_err("failed to setup input_method");
+		goto clean;
+	}
+
+	state->input_method_keyboard_grab =
+			zwp_input_method_v2_grab_keyboard(state->input_method);
+
+	static const struct zwp_input_method_keyboard_grab_v2_listener
+			im_activate_listener = {
+					.keymap = handle_keymap,
+					.key = handle_key,
+					.modifiers = handle_modifiers,
+					.repeat_info = noop,
+			};
+	zwp_input_method_keyboard_grab_v2_add_listener(
+			state->input_method_keyboard_grab, &im_activate_listener, state);
+
 	state->virtual_keyboard =
 			zwp_virtual_keyboard_manager_v1_create_virtual_keyboard(
 					state->virtual_keyboard_manager, state->seat);
 	if (state->virtual_keyboard == NULL) {
 		wlpinyin_err("failed to setup virtual keyboard");
-		goto clean;
-	}
-
-	state->input_method = zwp_input_method_manager_v2_get_input_method(
-			state->input_method_manager, state->seat);
-	if (state->input_method == NULL) {
-		wlpinyin_err("failed to setup input_method");
 		goto clean;
 	}
 
@@ -404,7 +341,6 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		goto clean;
 	}
 	*/
-
 	static const struct zwp_input_method_v2_listener im_listener = {
 			.activate = handle_activate,
 			.deactivate = handle_deactivate,
@@ -412,7 +348,7 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 			.text_change_cause = noop,
 			.content_type = noop,
 			.done = handle_done,
-			.unavailable = handle_deactivate,
+			.unavailable = noop,
 	};
 	zwp_input_method_v2_add_listener(state->input_method, &im_listener, state);
 
@@ -428,7 +364,6 @@ int im_loop(struct wlpinyin_state *state) {
 	enum {
 		fd_signal = 0,
 		fd_wayland,
-		fd_repeat,
 		fd_max,
 	};
 
@@ -439,9 +374,6 @@ int im_loop(struct wlpinyin_state *state) {
 
 	fds[fd_wayland].fd = wl_display_get_fd(state->display);
 	fds[fd_wayland].events = POLLIN;
-
-	fds[fd_repeat].fd = state->timerfd;
-	fds[fd_repeat].events = POLLIN;
 
 	bool running = true;
 
@@ -460,26 +392,6 @@ int im_loop(struct wlpinyin_state *state) {
 			if (wl_display_roundtrip(state->display) == -1) {
 				return -1;
 			}
-		} else if (fds[fd_repeat].revents & POLLIN) {
-			uint64_t tick;
-			read(fds[fd_repeat].fd, &tick, sizeof tick);
-			struct wlpinyin_key keynode = {
-					.keycode = state->im_repeat_key,
-					.xkb_keycode = state->im_repeat_key + 8,
-					.xkb_keysym = xkb_state_key_get_one_sym(state->xkb_state,
-																									state->im_repeat_key + 8),
-			};
-			for (; tick != 0; tick--) {
-				// repeat may be stopped if there are new events
-				if (wl_display_roundtrip(state->display) == -1)
-					break;
-				if (keynode.keycode == UINT32_MAX)
-					break;
-				keynode.pressed = true;
-				im_handle_key(state, &keynode);
-				keynode.pressed = false;
-				im_handle_key(state, &keynode);
-			}
 		}
 	}
 
@@ -490,19 +402,23 @@ int im_destroy(struct wlpinyin_state *state) {
 	if (state->input_method_keyboard_grab != NULL)
 		zwp_input_method_keyboard_grab_v2_release(
 				state->input_method_keyboard_grab);
+
 	if (state->engine)
 		im_engine_free(state->engine);
+
+	if (state->virtual_keyboard != NULL)
+		zwp_virtual_keyboard_v1_destroy(state->virtual_keyboard);
+
 	/*
 	if (state->popup_surface)
 		zwp_input_popup_surface_v2_destroy(state->popup_surface);
 	if (state->popup_surface_wl)
 		wl_surface_destroy(state->popup_surface_wl);
 	*/
-	if (state->virtual_keyboard)
-		zwp_virtual_keyboard_v1_destroy(state->virtual_keyboard);
 	if (state->input_method)
 		zwp_input_method_v2_destroy(state->input_method);
-	if (state->xkb_keymap_string)
+
+	if (state->xkb_keymap_string != NULL)
 		free(state->xkb_keymap_string);
 	if (state->xkb_state)
 		xkb_state_unref(state->xkb_state);

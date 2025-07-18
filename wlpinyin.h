@@ -8,7 +8,6 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "input-method-unstable-v2-client-protocol.h"
-#include "text-input-unstable-v3-client-protocol.h"
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 
 // user config
@@ -20,7 +19,6 @@ struct engine;
 
 struct wlpinyin_state {
 	int signalfd;
-	int timerfd;
 	struct wl_display *display;
 
 	struct wl_seat *seat;
@@ -39,9 +37,7 @@ struct wlpinyin_state {
 
 	uint32_t im_serial;
 
-	uint32_t im_repeat_delay;
-	uint32_t im_repeat_rate;
-	uint32_t im_repeat_key;
+	bool im_activated;
 
 	struct engine *engine;
 
