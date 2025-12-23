@@ -35,16 +35,16 @@ static void handle_notify(void *context_object,
 static void im_engine_update(rime_engine *engine) {
 	RimeApi *api = engine->api;
 
-	RIME_STRUCT_CLEAR(engine->status);
 	api->free_status(&engine->status);
+	RIME_STRUCT_CLEAR(engine->status);
 	api->get_status(engine->sess, &engine->status);
 
-	RIME_STRUCT_CLEAR(engine->context);
 	api->free_context(&engine->context);
+	RIME_STRUCT_CLEAR(engine->context);
 	api->get_context(engine->sess, &engine->context);
 
-	RIME_STRUCT_CLEAR(engine->commit);
 	api->free_commit(&engine->commit);
+	RIME_STRUCT_CLEAR(engine->commit);
 	api->get_commit(engine->sess, &engine->commit);
 }
 
