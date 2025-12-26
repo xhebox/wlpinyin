@@ -33,7 +33,7 @@ im_context_t *im_engine_fetch_context(rime_engine *engine) {
 	RimeCommit commit = {0};
 	RIME_STRUCT_INIT(RimeCommit, commit);
 	if (api->get_commit(engine->sess, &commit)) {
-		ctx->commit_text = strdup(commit.text ?: "");
+		ctx->commit_text = strdup(commit.text ? commit.text : "");
 		wlpinyin_dbg("commit_text: %s",
 								 ctx->commit_text ? ctx->commit_text : "(null)");
 		api->free_commit(&commit);
@@ -48,7 +48,8 @@ im_context_t *im_engine_fetch_context(rime_engine *engine) {
 	wlpinyin_dbg(
 			"composition.preedit: %s (len=%d), cursor=%d, sel=%d-%d",
 			context.composition.preedit ? context.composition.preedit : "(null)",
-			(int)strlen(context.composition.preedit ?: ""),
+			(int)strlen(context.composition.preedit ? context.composition.preedit
+																							: ""),
 			context.composition.cursor_pos, context.composition.sel_start,
 			context.composition.sel_end);
 	wlpinyin_dbg("menu: num_candidates=%d, page_no=%d, highlighted=%d",
@@ -56,7 +57,8 @@ im_context_t *im_engine_fetch_context(rime_engine *engine) {
 							 context.menu.highlighted_candidate_index);
 
 	// Copy preedit
-	ctx->preedit_text = strdup(context.composition.preedit ?: "");
+	ctx->preedit_text =
+			strdup(context.composition.preedit ? context.composition.preedit : "");
 	ctx->preedit_cursor = context.composition.cursor_pos;
 
 	// Copy candidates
@@ -146,7 +148,7 @@ rime_engine *im_engine_new() {
 
 	RimeSchemaList schemas;
 	api->get_schema_list(&schemas);
-	for (int i = 0; i < schemas.size; i++) {
+	for (size_t i = 0; i < schemas.size; i++) {
 		wlpinyin_dbg("schema_name: %s, id: %s", schemas.list[i].name,
 								 schemas.list[i].schema_id);
 		if (api->select_schema(engine->sess, schemas.list[i].schema_id))

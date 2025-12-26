@@ -1,5 +1,10 @@
-project('wlpinyin',['c'],
-  default_options : ['warning_level=1'])
+project('wlpinyin', ['c'], default_options : ['warning_level=3', 'c_std=c23'])
+
+add_project_arguments([
+  '-Wno-gnu-zero-variadic-macro-arguments', '-Wno-disabled-macro-expansion', '-Wno-strict-prototypes', '-Wno-unsafe-buffer-usage',
+  '-Wformat',
+  '-D_GNU_SOURCE',
+], language: 'c')
 
 wl_client = dependency('wayland-client')
 wl_protocols = dependency('wayland-protocols')
@@ -11,21 +16,12 @@ scanner = find_program('wayland-scanner')
 scanner_private_code = generator(scanner, output: '@BASENAME@-protocol.c', arguments: ['private-code', '@INPUT@', '@OUTPUT@'])
 scanner_client_header = generator(scanner, output: '@BASENAME@-client-protocol.h', arguments: ['client-header', '@INPUT@', '@OUTPUT@'])
 
-wl_protocols_dir = wl_protocols.get_pkgconfig_variable('pkgdatadir')
+wl_protocols_dir = wl_protocols.get_variable(pkgconfig: 'pkgdatadir')
 xdg_shell = wl_protocols_dir + '/stable/xdg-shell/xdg-shell.xml'
 text_input_path = wl_protocols_dir + '/unstable/text-input/text-input-unstable-v3.xml'
-protocols_src=[
-  scanner_private_code.process('input-method-unstable-v2.xml'),
-  scanner_private_code.process(text_input_path),
-  scanner_private_code.process('virtual-keyboard-unstable-v1.xml'),
-  scanner_private_code.process(xdg_shell)
-]
-protocols_headers=[
-  scanner_client_header.process('input-method-unstable-v2.xml'),
-  scanner_client_header.process(text_input_path),
-  scanner_client_header.process('virtual-keyboard-unstable-v1.xml'),
-  scanner_client_header.process(xdg_shell)
-]
-protocols_dep = declare_dependency(sources: protocols_src + protocols_headers, dependencies: wl_client)
+protocols = ['input-method-unstable-v2.xml', text_input_path, 'virtual-keyboard-unstable-v1.xml', xdg_shell]
+protocols_src = scanner_private_code.process(protocols)
+protocols_headers = scanner_client_header.process(protocols)
+protocols_dep = declare_dependency(sources: [protocols_src, protocols_headers], dependencies: wl_client)
 
 executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c'], dependencies: [wl_client, pinyin, xkbcommon, protocols_dep, rt], install: true)

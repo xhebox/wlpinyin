@@ -9,9 +9,9 @@
 
 #include "wlpinyin.h"
 
-void noop() {}
-
 int main(int argc, char *argv[]) {
+	UNUSED(argc);
+	UNUSED(argv);
 	sigset_t sigset;
 
 	int r = sigemptyset(&sigset);

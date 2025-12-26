@@ -83,6 +83,6 @@ void im_engine_reset(struct engine *);
 #define wlpinyin_dbg(fmt, ...)
 #endif
 
-#define UNUSED(x) (void)x;
+#define UNUSED(x) (void)x
 
 #endif

@@ -11,11 +11,9 @@
 
 #include "wlpinyin.h"
 
-#define MIN(a, b) (a < b ? a : b)
-
 struct wlpinyin_key {
-	xkb_keysym_t xkb_keysym;
 	xkb_keycode_t xkb_keycode;
+	xkb_keysym_t xkb_keysym;
 	uint32_t keycode;
 	bool pressed;
 };
@@ -40,7 +38,7 @@ static void im_send_text(struct wlpinyin_state *state, const char *text) {
 static void noop() {}
 
 static void im_panel_update(struct wlpinyin_state *state, im_context_t *ctx) {
-	char buf[2048] = {};
+	char buf[2048] = {0};
 	int bufptr = 0;
 
 	if (!ctx->preedit_text || strlen(ctx->preedit_text) == 0) {
@@ -54,7 +52,8 @@ static void im_panel_update(struct wlpinyin_state *state, im_context_t *ctx) {
 	for (int i = 0; i < preedit_len; i++) {
 		if (i == ctx->preedit_cursor)
 			bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
-		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "%c", ctx->preedit_text[i]);
+		bufptr +=
+				snprintf(&buf[bufptr], sizeof buf - bufptr, "%c", ctx->preedit_text[i]);
 	}
 	if (ctx->preedit_cursor == preedit_len)
 		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
@@ -104,7 +103,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 
 	if (!handled) {
 #ifndef NDEBUG
-		char buf[512] = {};
+		char buf[512] = {0};
 		xkb_keysym_get_name(keynode->xkb_keysym, buf, sizeof buf);
 		wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x, %s", buf,
 								 keynode->xkb_keycode, keynode->xkb_keysym,
@@ -163,7 +162,7 @@ static void handle_key(
 	UNUSED(zwp_input_method_keyboard_grab_v2);
 	struct wlpinyin_state *state = data;
 
-	struct wlpinyin_key keynode = {};
+	struct wlpinyin_key keynode = {0};
 	keynode.keycode = key;
 	keynode.xkb_keycode = key + 8;
 	keynode.xkb_keysym =
@@ -174,7 +173,7 @@ static void handle_key(
 											 keynode.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 #ifndef NDEBUG
-	char buf[512] = {};
+	char buf[512] = {0};
 	xkb_keysym_get_name(keynode.xkb_keysym, buf, sizeof buf);
 	wlpinyin_dbg("ev_key[%s]: keycode %02x, keysym %02x, serial %d, time %d, %s",
 							 buf, keynode.xkb_keycode, keynode.xkb_keysym, serial, time,
@@ -306,7 +305,9 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 					.keymap = handle_keymap,
 					.key = handle_key,
 					.modifiers = handle_modifiers,
-					.repeat_info = noop,
+					.repeat_info =
+							(void (*)(void *, struct zwp_input_method_keyboard_grab_v2 *,
+												int32_t, int32_t))noop,
 			};
 	zwp_input_method_keyboard_grab_v2_add_listener(
 			state->input_method_keyboard_grab, &im_activate_listener, state);
@@ -336,11 +337,14 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 	static const struct zwp_input_method_v2_listener im_listener = {
 			.activate = handle_activate,
 			.deactivate = handle_deactivate,
-			.surrounding_text = noop,
-			.text_change_cause = noop,
-			.content_type = noop,
+			.surrounding_text = (void (*)(void *, struct zwp_input_method_v2 *,
+																		const char *, uint32_t, uint32_t))noop,
+			.text_change_cause =
+					(void (*)(void *, struct zwp_input_method_v2 *, uint32_t))noop,
+			.content_type = (void (*)(void *, struct zwp_input_method_v2 *, uint32_t,
+																uint32_t))noop,
 			.done = handle_done,
-			.unavailable = noop,
+			.unavailable = (void (*)(void *, struct zwp_input_method_v2 *))noop,
 	};
 	zwp_input_method_v2_add_listener(state->input_method, &im_listener, state);
 
@@ -359,7 +363,7 @@ int im_loop(struct wlpinyin_state *state) {
 		fd_max,
 	};
 
-	struct pollfd fds[fd_max] = {};
+	struct pollfd fds[fd_max] = {0};
 
 	fds[fd_signal].fd = state->signalfd;
 	fds[fd_signal].events = POLLIN;
@@ -371,7 +375,7 @@ int im_loop(struct wlpinyin_state *state) {
 
 	while (running && poll(fds, sizeof fds / sizeof fds[fd_wayland], -1) != -1) {
 		if (fds[fd_signal].revents & POLLIN) {
-			struct signalfd_siginfo info = {};
+			struct signalfd_siginfo info = {0};
 			read(fds[fd_signal].fd, &info, sizeof(info));
 			switch (info.ssi_signo) {
 			case SIGINT:
