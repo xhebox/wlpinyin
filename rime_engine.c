@@ -1,6 +1,5 @@
 #include <rime_api.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "wlpinyin.h"
 
@@ -176,23 +175,9 @@ const char *im_engine_commit_text(rime_engine *engine) {
 	if (!engine)
 		return "";
 
-	const char *ret = engine->commit.text;
 	im_engine_update(engine);
+	const char *ret = engine->commit.text;
 	return ret ? ret : "";
-}
-
-bool im_engine_composing(rime_engine *engine) {
-	if (!engine)
-		return false;
-
-	return engine->status.is_composing;
-}
-
-bool im_engine_activated(rime_engine *engine) {
-	if (!engine)
-		return false;
-
-	return !engine->status.is_ascii_mode;
 }
 
 void im_engine_toggle(rime_engine *engine) {

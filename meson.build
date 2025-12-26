@@ -26,7 +26,6 @@ protocols_headers=[
   scanner_client_header.process('virtual-keyboard-unstable-v1.xml'),
   scanner_client_header.process(xdg_shell)
 ]
-lib_protocols = static_library('protocols', protocols_src + protocols_headers, dependencies: wl_client)
-protocols_dep = declare_dependency(link_with: lib_protocols, sources: protocols_headers)
+protocols_dep = declare_dependency(sources: protocols_src + protocols_headers, dependencies: wl_client)
 
 executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c'], dependencies: [wl_client, pinyin, xkbcommon, protocols_dep, rt], install: true)

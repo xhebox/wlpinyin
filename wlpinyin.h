@@ -54,9 +54,7 @@ int im_destroy(struct wlpinyin_state *state);
 struct engine *im_engine_new();
 void im_engine_free(struct engine *);
 
-bool im_engine_composing(struct engine *);
 bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
-bool im_engine_activated(struct engine *);
 
 typedef struct predit {
 	int cursor;
