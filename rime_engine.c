@@ -1,5 +1,6 @@
 #include <rime_api.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "wlpinyin.h"
 
@@ -7,9 +8,6 @@ typedef struct engine {
 	RimeApi *api;
 	RimeTraits traits;
 	RimeSessionId sess;
-	RimeStatus status;
-	RimeContext context;
-	RimeCommit commit;
 	char *user_dir;
 } rime_engine;
 
@@ -24,17 +22,74 @@ static void handle_notify(void *context_object,
 		return;
 }
 
-static void im_engine_update(rime_engine *engine) {
+im_context_t *im_engine_fetch_context(rime_engine *engine) {
+	im_context_t *ctx = calloc(1, sizeof(im_context_t));
+	if (!ctx)
+		return NULL;
+
 	RimeApi *api = engine->api;
 
-	api->free_status(&engine->status);
-	api->get_status(engine->sess, &engine->status);
+	// Get commit
+	RimeCommit commit = {0};
+	RIME_STRUCT_INIT(RimeCommit, commit);
+	if (api->get_commit(engine->sess, &commit)) {
+		ctx->commit_text = strdup(commit.text ?: "");
+		wlpinyin_dbg("commit_text: %s",
+								 ctx->commit_text ? ctx->commit_text : "(null)");
+		api->free_commit(&commit);
+	}
 
-	api->free_context(&engine->context);
-	api->get_context(engine->sess, &engine->context);
+	// Get context
+	RimeContext context = {0};
+	RIME_STRUCT_INIT(RimeContext, context);
+	if (!api->get_context(engine->sess, &context)) {
+		return ctx;
+	}
+	wlpinyin_dbg(
+			"composition.preedit: %s (len=%d), cursor=%d, sel=%d-%d",
+			context.composition.preedit ? context.composition.preedit : "(null)",
+			(int)strlen(context.composition.preedit ?: ""),
+			context.composition.cursor_pos, context.composition.sel_start,
+			context.composition.sel_end);
+	wlpinyin_dbg("menu: num_candidates=%d, page_no=%d, highlighted=%d",
+							 context.menu.num_candidates, context.menu.page_no,
+							 context.menu.highlighted_candidate_index);
 
-	api->free_commit(&engine->commit);
-	api->get_commit(engine->sess, &engine->commit);
+	// Copy preedit
+	ctx->preedit_text = strdup(context.composition.preedit ?: "");
+	ctx->preedit_cursor = context.composition.cursor_pos;
+
+	// Copy candidates
+	ctx->num_candidates = context.menu.num_candidates;
+	ctx->page_no = context.menu.page_no;
+	ctx->highlighted_index = context.menu.highlighted_candidate_index;
+	if (ctx->num_candidates > 0) {
+		ctx->candidates = calloc(ctx->num_candidates, sizeof(char *));
+		for (int i = 0; i < ctx->num_candidates; i++) {
+			ctx->candidates[i] = strdup(context.menu.candidates[i].text);
+		}
+	}
+
+	api->free_context(&context);
+
+	return ctx;
+}
+
+void im_engine_free_context(im_context_t *ctx) {
+	if (!ctx)
+		return;
+
+	free(ctx->preedit_text);
+	free(ctx->commit_text);
+
+	if (ctx->candidates) {
+		for (int i = 0; i < ctx->num_candidates; i++) {
+			free(ctx->candidates[i]);
+		}
+		free(ctx->candidates);
+	}
+
+	free(ctx);
 }
 
 rime_engine *im_engine_new() {
@@ -99,10 +154,6 @@ rime_engine *im_engine_new() {
 	}
 	api->free_schema_list(&schemas);
 
-	RIME_STRUCT_INIT(RimeStatus, engine->status);
-	RIME_STRUCT_INIT(RimeContext, engine->context);
-	RIME_STRUCT_INIT(RimeCommit, engine->commit);
-
 	return engine;
 }
 
@@ -113,26 +164,9 @@ void im_engine_free(rime_engine *engine) {
 	if (engine->user_dir != NULL)
 		free(engine->user_dir);
 
-	engine->api->free_commit(&engine->commit);
-	engine->api->free_context(&engine->context);
-	engine->api->free_status(&engine->status);
 	engine->api->destroy_session(engine->sess);
 	engine->api->finalize();
 	free(engine);
-}
-
-preedit_t im_engine_preedit(rime_engine *engine) {
-	preedit_t res = {};
-
-	if (!engine)
-		return res;
-
-	res.start = engine->context.composition.sel_start;
-	res.end = engine->context.composition.sel_end;
-	res.cursor = engine->context.composition.cursor_pos;
-	res.text = engine->context.composition.preedit;
-
-	return res;
 }
 
 bool im_engine_key(rime_engine *engine,
@@ -141,43 +175,7 @@ bool im_engine_key(rime_engine *engine,
 	if (!engine)
 		return false;
 
-	bool res = engine->api->process_key(engine->sess, keycode, mods);
-
-	im_engine_update(engine);
-	return res;
-}
-
-candidate_t im_engine_candidate(rime_engine *engine) {
-	candidate_t res = {};
-
-	if (!engine)
-		return res;
-
-	res.highlighted_candidate_index =
-			engine->context.menu.highlighted_candidate_index;
-	res.page_no = engine->context.menu.page_no;
-	res.num_candidates = engine->context.menu.num_candidates;
-	return res;
-}
-
-const char *im_engine_candidate_get(rime_engine *engine, int index) {
-	if (!engine)
-		return NULL;
-
-	if (index >= engine->context.menu.num_candidates)
-		return NULL;
-
-	RimeCandidate *cand = &engine->context.menu.candidates[index];
-	return cand->text;
-}
-
-const char *im_engine_commit_text(rime_engine *engine) {
-	if (!engine)
-		return "";
-
-	im_engine_update(engine);
-	const char *ret = engine->commit.text;
-	return ret ? ret : "";
+	return engine->api->process_key(engine->sess, keycode, mods);
 }
 
 void im_engine_toggle(rime_engine *engine) {
@@ -187,7 +185,6 @@ void im_engine_toggle(rime_engine *engine) {
 	engine->api->set_option(engine->sess, "ascii_mode",
 													!engine->api->get_option(engine->sess, "ascii_mode"));
 	engine->api->commit_composition(engine->sess);
-	im_engine_update(engine);
 }
 
 void im_engine_reset(rime_engine *engine) {
@@ -195,6 +192,4 @@ void im_engine_reset(rime_engine *engine) {
 		return;
 
 	engine->api->clear_composition(engine->sess);
-	engine->api->commit_composition(engine->sess);
-	im_engine_update(engine);
 }

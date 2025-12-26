@@ -39,39 +39,31 @@ static void im_send_text(struct wlpinyin_state *state, const char *text) {
 
 static void noop() {}
 
-static void im_panel_update(struct wlpinyin_state *state) {
+static void im_panel_update(struct wlpinyin_state *state, im_context_t *ctx) {
 	char buf[2048] = {};
 	int bufptr = 0;
 
-	preedit_t preedit = im_engine_preedit(state->engine);
-	if (!preedit.text) {
+	if (!ctx->preedit_text || strlen(ctx->preedit_text) == 0) {
 		im_send_preedit(state, "");
 		return;
 	}
 
-	candidate_t cand = im_engine_candidate(state->engine);
-	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "[%d] ", cand.page_no);
+	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "[%d] ", ctx->page_no);
 
-	int preedit_len = strlen(preedit.text);
-	for (int i = 0; i <= preedit_len; i++) {
-		if (preedit.start < preedit.end) {
-			if (i == preedit.start)
-				bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "<");
-			else if (i == preedit.end)
-				bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, ">");
-		}
-		if (i == preedit.cursor)
+	int preedit_len = strlen(ctx->preedit_text);
+	for (int i = 0; i < preedit_len; i++) {
+		if (i == ctx->preedit_cursor)
 			bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
-		if (i < preedit_len)
-			bufptr +=
-					snprintf(&buf[bufptr], sizeof buf - bufptr, "%c", preedit.text[i]);
+		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "%c", ctx->preedit_text[i]);
 	}
+	if (ctx->preedit_cursor == preedit_len)
+		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
 
-	for (int i = 0; i < cand.num_candidates; i++) {
-		bool highlighted = i == cand.highlighted_candidate_index;
+	for (int i = 0; i < ctx->num_candidates; i++) {
+		bool highlighted = i == ctx->highlighted_index;
 		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, " %s%d %s%s",
 											 highlighted ? "[" : "", i + 1,
-											 im_engine_candidate_get(state->engine, i),
+											 ctx->candidates[i] ? ctx->candidates[i] : "",
 											 highlighted ? "]" : "");
 	}
 
@@ -101,11 +93,11 @@ static void im_handle_key(struct wlpinyin_state *state,
 		}
 
 		if (handled) {
-			im_panel_update(state);
-			const char *commit = im_engine_commit_text(state->engine);
-			if (strlen(commit) != 0)
-				im_send_text(state, commit);
-
+			im_context_t *ctx = im_engine_fetch_context(state->engine);
+			im_panel_update(state, ctx);
+			if (ctx->commit_text && ctx->commit_text[0])
+				im_send_text(state, ctx->commit_text);
+			im_engine_free_context(ctx);
 			zwp_input_method_v2_commit(state->input_method, state->im_serial);
 		}
 	}

@@ -54,25 +54,22 @@ int im_destroy(struct wlpinyin_state *state);
 struct engine *im_engine_new();
 void im_engine_free(struct engine *);
 
-bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
+typedef struct {
+	char *preedit_text;
+	int preedit_cursor;
 
-typedef struct predit {
-	int cursor;
-	int start;
-	int end;
-	char *text;
-} preedit_t;
-
-typedef struct candidate {
 	int page_no;
-	int highlighted_candidate_index;
+	int highlighted_index;
+	char **candidates;
 	int num_candidates;
-} candidate_t;
 
-preedit_t im_engine_preedit(struct engine *);
-candidate_t im_engine_candidate(struct engine *);
-const char *im_engine_candidate_get(struct engine *, int);
-const char *im_engine_commit_text(struct engine *);
+	char *commit_text;
+} im_context_t;
+
+im_context_t *im_engine_fetch_context(struct engine *);
+void im_engine_free_context(im_context_t *);
+
+bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
 void im_engine_toggle(struct engine *);
 void im_engine_reset(struct engine *);
 
