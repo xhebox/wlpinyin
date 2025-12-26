@@ -11,7 +11,6 @@ typedef struct engine {
 	RimeStatus status;
 	RimeContext context;
 	RimeCommit commit;
-	bool ready;
 	char *user_dir;
 } rime_engine;
 
@@ -24,12 +23,6 @@ static void handle_notify(void *context_object,
 	rime_engine *engine = context_object;
 	if (!engine)
 		return;
-
-	if (strcmp(message_type, "deploy") == 0) {
-		if (strcmp(message_value, "success") == 0) {
-			engine->ready = true;
-		}
-	}
 }
 
 static void im_engine_update(rime_engine *engine) {
@@ -87,7 +80,6 @@ rime_engine *im_engine_new() {
 
 	api->initialize(&engine->traits);
 
-	engine->ready = false;
 	api->start_maintenance(true);
 
 	// wait for deploy
