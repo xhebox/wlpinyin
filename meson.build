@@ -1,15 +1,22 @@
-project('wlpinyin', ['c'], default_options : ['warning_level=3', 'c_std=c23'])
+project('wlpinyin',
+  ['c'],
+  default_options : ['warning_level=3', 'c_std=c23'],
+  meson_version: '>=1.1',
+)
 
 add_project_arguments([
-  '-Wno-gnu-zero-variadic-macro-arguments', '-Wno-disabled-macro-expansion', '-Wno-strict-prototypes', '-Wno-unsafe-buffer-usage',
+  '-Wno-gnu-zero-variadic-macro-arguments', '-Wno-disabled-macro-expansion', '-Wno-strict-prototypes', '-Wno-unsafe-buffer-usage', '-Wno-empty-translation-unit',
   '-Wformat',
   '-D_GNU_SOURCE',
 ], language: 'c')
+
+enable_popup = get_option('popup')
 
 wl_client = dependency('wayland-client')
 wl_protocols = dependency('wayland-protocols')
 pinyin = dependency('rime')
 xkbcommon = dependency('xkbcommon')
+
 cc = meson.get_compiler('c')
 rt = cc.find_library('rt', required: false)
 scanner = find_program('wayland-scanner')
@@ -24,4 +31,10 @@ protocols_src = scanner_private_code.process(protocols)
 protocols_headers = scanner_client_header.process(protocols)
 protocols_dep = declare_dependency(sources: [protocols_src, protocols_headers], dependencies: wl_client)
 
-executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c'], dependencies: [wl_client, pinyin, xkbcommon, protocols_dep, rt], install: true)
+popup_deps = []
+if enable_popup.enabled()
+  add_project_arguments('-DENABLE_POPUP', language: 'c')
+  popup_deps = [dependency('cairo'), dependency('pangocairo')]
+endif
+
+executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c', 'popup_renderer.c', 'text_renderer.c'], dependencies: [wl_client, pinyin, xkbcommon, protocols_dep, rt] + popup_deps, install: true)

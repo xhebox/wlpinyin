@@ -1,0 +1,1 @@
+option('popup', type : 'feature', value: 'disabled', description: 'enable gui using pango/cairo')

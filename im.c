@@ -12,7 +12,6 @@
 #include "wlpinyin.h"
 
 struct wlpinyin_key {
-	xkb_keycode_t xkb_keycode;
 	xkb_keysym_t xkb_keysym;
 	uint32_t keycode;
 	bool pressed;
@@ -24,52 +23,12 @@ static int32_t get_miliseconds() {
 	return time.tv_sec * 1000 + time.tv_nsec / (1000 * 1000);
 }
 
-static void im_send_preedit(struct wlpinyin_state *state, const char *text) {
-	wlpinyin_dbg("upd_preedit: %s", text ? text : "");
-	zwp_input_method_v2_set_preedit_string(state->input_method, text ? text : "",
-																				 0, 0);
-}
-
 static void im_send_text(struct wlpinyin_state *state, const char *text) {
 	wlpinyin_dbg("upd_text: %s", text ? text : "");
 	zwp_input_method_v2_commit_string(state->input_method, text ? text : "");
 }
 
 static void noop() {}
-
-static void im_panel_update(struct wlpinyin_state *state, im_context_t *ctx) {
-	char buf[2048] = {0};
-	int bufptr = 0;
-
-	if (!ctx->preedit_text || strlen(ctx->preedit_text) == 0) {
-		im_send_preedit(state, "");
-		return;
-	}
-
-	bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "[%d] ", ctx->page_no);
-
-	int preedit_len = strlen(ctx->preedit_text);
-	for (int i = 0; i < preedit_len; i++) {
-		if (i == ctx->preedit_cursor)
-			bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
-		bufptr +=
-				snprintf(&buf[bufptr], sizeof buf - bufptr, "%c", ctx->preedit_text[i]);
-	}
-	if (ctx->preedit_cursor == preedit_len)
-		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, "|");
-
-	for (int i = 0; i < ctx->num_candidates; i++) {
-		bool highlighted = i == ctx->highlighted_index;
-		bufptr += snprintf(&buf[bufptr], sizeof buf - bufptr, " %s%d %s%s",
-											 highlighted ? "[" : "", i + 1,
-											 ctx->candidates[i] ? ctx->candidates[i] : "",
-											 highlighted ? "]" : "");
-	}
-
-	buf[bufptr] = 0;
-
-	im_send_preedit(state, buf);
-}
 
 static void im_handle_key(struct wlpinyin_state *state,
 													struct wlpinyin_key *keynode) {
@@ -92,11 +51,10 @@ static void im_handle_key(struct wlpinyin_state *state,
 		}
 
 		if (handled) {
-			im_context_t *ctx = im_engine_fetch_context(state->engine);
-			im_panel_update(state, ctx);
-			if (ctx->commit_text && ctx->commit_text[0])
-				im_send_text(state, ctx->commit_text);
-			im_engine_free_context(ctx);
+			im_panel_update(state);
+			const char *commit = im_engine_commit(state->engine);
+			if (strlen(commit) > 0)
+				im_send_text(state, commit);
 			zwp_input_method_v2_commit(state->input_method, state->im_serial);
 		}
 	}
@@ -105,8 +63,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 #ifndef NDEBUG
 		char buf[512] = {0};
 		xkb_keysym_get_name(keynode->xkb_keysym, buf, sizeof buf);
-		wlpinyin_dbg("upd_kbd[%s]: keycode %02x, keysym %02x, %s", buf,
-								 keynode->xkb_keycode, keynode->xkb_keysym,
+		wlpinyin_dbg("send_key[%s]: keysym %02x, %s", buf, keynode->xkb_keysym,
 								 keynode->pressed ? "pressed" : "released");
 #endif
 
@@ -164,19 +121,18 @@ static void handle_key(
 
 	struct wlpinyin_key keynode = {0};
 	keynode.keycode = key;
-	keynode.xkb_keycode = key + 8;
-	keynode.xkb_keysym =
-			xkb_state_key_get_one_sym(state->xkb_state, keynode.xkb_keycode);
+	xkb_keycode_t xkb_keycode = key + 8;
+	keynode.xkb_keysym = xkb_state_key_get_one_sym(state->xkb_state, xkb_keycode);
 	keynode.pressed = kstate == WL_KEYBOARD_KEY_STATE_PRESSED;
 
-	xkb_state_update_key(state->xkb_state, keynode.xkb_keycode,
+	xkb_state_update_key(state->xkb_state, xkb_keycode,
 											 keynode.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 #ifndef NDEBUG
 	char buf[512] = {0};
 	xkb_keysym_get_name(keynode.xkb_keysym, buf, sizeof buf);
-	wlpinyin_dbg("ev_key[%s]: keycode %02x, keysym %02x, serial %d, time %d, %s",
-							 buf, keynode.xkb_keycode, keynode.xkb_keysym, serial, time,
+	wlpinyin_dbg("event_key[%s]: keysym %02x, serial %d, time %d, %s", buf,
+							 keynode.xkb_keysym, serial, time,
 							 keynode.pressed ? "pressed" : "released");
 #endif
 
@@ -210,6 +166,7 @@ static void handle_deactivate(void *data,
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("ev_deactive");
 	im_engine_reset(state->engine);
+	im_panel_update(state);
 	state->im_activated = false;
 }
 
@@ -219,6 +176,7 @@ static void handle_activate(void *data,
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg("ev_active");
 	im_engine_reset(state->engine);
+	im_panel_update(state);
 	state->im_activated = true;
 }
 
@@ -247,6 +205,9 @@ static void handle_global(void *data,
 	} else if (strcmp(interface, wl_compositor_interface.name) == 0) {
 		state->compositor =
 				wl_registry_bind(registry, name, &wl_compositor_interface, version);
+	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
+		state->wl_shm =
+				wl_registry_bind(registry, name, &wl_shm_interface, version);
 	}
 }
 
@@ -277,12 +238,6 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 	}
 
 	state->im_serial = 0;
-
-	state->engine = im_engine_new();
-	if (state->engine == NULL) {
-		wlpinyin_err("failed to setup engine");
-		goto clean;
-	}
 
 	state->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	if (state->xkb_context == NULL) {
@@ -320,20 +275,6 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		goto clean;
 	}
 
-	/*
-	state->popup_surface_wl = wl_compositor_create_surface(state->compositor);
-	if (state->popup_surface_wl == NULL) {
-		wlpinyin_err("failed to create surface");
-		goto clean;
-	}
-
-	state->popup_surface = zwp_input_method_v2_get_input_popup_surface(
-			state->input_method, state->popup_surface_wl);
-	if (state->popup_surface_wl == NULL) {
-		wlpinyin_err("failed to get popup surface");
-		goto clean;
-	}
-	*/
 	static const struct zwp_input_method_v2_listener im_listener = {
 			.activate = handle_activate,
 			.deactivate = handle_deactivate,
@@ -347,6 +288,15 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 			.unavailable = (void (*)(void *, struct zwp_input_method_v2 *))noop,
 	};
 	zwp_input_method_v2_add_listener(state->input_method, &im_listener, state);
+
+	if (im_panel_init(state) != 0)
+		goto clean;
+
+	state->engine = im_engine_new();
+	if (state->engine == NULL) {
+		wlpinyin_err("failed to setup engine");
+		goto clean;
+	}
 
 	wl_display_roundtrip(state->display);
 	return state;
@@ -405,12 +355,8 @@ int im_destroy(struct wlpinyin_state *state) {
 	if (state->virtual_keyboard != NULL)
 		zwp_virtual_keyboard_v1_destroy(state->virtual_keyboard);
 
-	/*
-	if (state->popup_surface)
-		zwp_input_popup_surface_v2_destroy(state->popup_surface);
-	if (state->popup_surface_wl)
-		wl_surface_destroy(state->popup_surface_wl);
-	*/
+	im_panel_destroy(state);
+
 	if (state->input_method)
 		zwp_input_method_v2_destroy(state->input_method);
 
