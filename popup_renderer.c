@@ -12,6 +12,7 @@
 
 #include "input-method-unstable-v2-client-protocol.h"
 #include "wlpinyin.h"
+#include "config.h"
 
 #define ITEM_SPACING 8
 #define ROW_SPACING 4
@@ -22,17 +23,17 @@
 static int DEFAULT_SHM_SIZE = 4096;
 
 static void draw_rounded_rectangle(cairo_t *cr,
-																	 double x,
-																	 double y,
-																	 double width,
-																	 double height,
-																	 double radius) {
+				   double x,
+				   double y,
+				   double width,
+				   double height,
+				   double radius) {
 	cairo_move_to(cr, x + radius, y);
 	cairo_line_to(cr, x + width - radius, y);
 	cairo_curve_to(cr, x + width, y, x + width, y, x + width, y + radius);
 	cairo_line_to(cr, x + width, y + height - radius);
 	cairo_curve_to(cr, x + width, y + height, x + width, y + height,
-								 x + width - radius, y + height);
+		x + width - radius, y + height);
 	cairo_line_to(cr, x + radius, y + height);
 	cairo_curve_to(cr, x, y + height, x, y + height, x, y + height - radius);
 	cairo_line_to(cr, x, y + radius);
@@ -40,8 +41,8 @@ static void draw_rounded_rectangle(cairo_t *cr,
 }
 
 static void popup_handle_frame_done(void *data,
-																		struct wl_callback *cb,
-																		uint32_t serial) {
+				    struct wl_callback *cb,
+				    uint32_t serial) {
 	UNUSED(serial);
 	wl_callback_destroy(cb);
 
@@ -57,7 +58,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 
 	im_preedit_t preedit = im_engine_preedit(state->engine);
 	zwp_input_method_v2_set_preedit_string(state->input_method, preedit.text,
-																				 preedit.begin, preedit.end);
+					preedit.begin, preedit.end);
 
 	im_context_t ctx = im_engine_context(state->engine);
 
@@ -79,7 +80,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 	state->frame_callback_done = false;
 	struct wl_callback *cb = wl_surface_frame(state->popup_surface);
 	static const struct wl_callback_listener frame_listener = {
-			.done = popup_handle_frame_done,
+		.done = popup_handle_frame_done,
 	};
 	wl_callback_add_listener(cb, &frame_listener, state);
 
@@ -111,7 +112,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 
 		const char *text = im_engine_cand_get(state->engine);
 		bufptr =
-				snprintf(&buf[bufptr], sizeof(buf) - bufptr, "%d %s", col + 1, text);
+			snprintf(&buf[bufptr], sizeof(buf) - bufptr, "%d %s", col + 1, text);
 		pango_layout_set_text(state->popup_pango_layout, buf, bufptr);
 		PangoRectangle text_rect;
 		pango_layout_get_pixel_extents(state->popup_pango_layout, NULL, &text_rect);
@@ -136,7 +137,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 
 	/* Resize buffer if needed */
 	int panel_stride =
-			cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, panel_width);
+		cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, panel_width);
 	int buffer_newsz = panel_stride * panel_height;
 
 	if (state->shm_size < buffer_newsz) {
@@ -152,7 +153,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 		wl_shm_pool_resize(state->shm_pool, buffer_newsz);
 
 		state->popup_data = mmap(NULL, buffer_newsz, PROT_READ | PROT_WRITE,
-														 MAP_SHARED, state->shm_pool_fd, 0);
+			   MAP_SHARED, state->shm_pool_fd, 0);
 		if (state->popup_data == MAP_FAILED) {
 			wlpinyin_err("mmap failed: %s", strerror(errno));
 			state->popup_data = NULL;
@@ -165,13 +166,13 @@ int im_panel_update(struct wlpinyin_state *state) {
 	if (state->shm_buffer)
 		wl_buffer_destroy(state->shm_buffer);
 	state->shm_buffer =
-			wl_shm_pool_create_buffer(state->shm_pool, 0, panel_width, panel_height,
-																panel_stride, WL_SHM_FORMAT_ARGB8888);
+		wl_shm_pool_create_buffer(state->shm_pool, 0, panel_width, panel_height,
+			    panel_stride, WL_SHM_FORMAT_ARGB8888);
 
 	/* Create Cairo surface */
 	cairo_surface_t *cairo_surface = cairo_image_surface_create_for_data(
-			state->popup_data, CAIRO_FORMAT_ARGB32, panel_width, panel_height,
-			panel_stride);
+		state->popup_data, CAIRO_FORMAT_ARGB32, panel_width, panel_height,
+		panel_stride);
 	cairo_t *cr = cairo_create(cairo_surface);
 
 	/* Clear */
@@ -180,7 +181,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 
 	/* Draw background */
 	draw_rounded_rectangle(cr, 0, 0, panel_width, panel_height, CORNER_RADIUS);
-	cairo_set_source_rgba(cr, 0.25, 0.25, 0.27, 0.95);
+	cairo_set_source_rgba(cr, POPUP_BG_RGBA[0], POPUP_BG_RGBA[1], POPUP_BG_RGBA[2], POPUP_BG_RGBA[3]);
 	cairo_fill(cr);
 
 	/* Draw candidates in grid layout */
@@ -210,11 +211,12 @@ int im_panel_update(struct wlpinyin_state *state) {
 		/* Draw highlight background */
 		if (row == ctx.page_no && col == ctx.highlighted_index) {
 			draw_rounded_rectangle(cr, x, y, row_width[col], row_height, 0);
-			cairo_set_source_rgba(cr, 0.3, 0.5, 0.8, 1.0);
+			cairo_set_source_rgba(cr, POPUP_HL_RGBA[0], POPUP_HL_RGBA[1], POPUP_HL_RGBA[2], POPUP_HL_RGBA[3]);
+
 			cairo_fill(cr);
 		}
 
-		cairo_set_source_rgba(cr, 0.95, 0.95, 0.95, 1.0);
+		cairo_set_source_rgba(cr, POPUP_TXT_RGBA[0], POPUP_TXT_RGBA[1], POPUP_TXT_RGBA[2], POPUP_TXT_RGBA[3]);
 		cairo_move_to(cr, x + ITEM_SPACING, y + ROW_SPACING);
 		pango_cairo_show_layout(cr, state->popup_pango_layout);
 	}
@@ -245,7 +247,7 @@ int im_panel_init(struct wlpinyin_state *state) {
 	}
 
 	state->popup_surface_v2 = zwp_input_method_v2_get_input_popup_surface(
-			state->input_method, state->popup_surface);
+		state->input_method, state->popup_surface);
 
 	state->shm_pool_fd = memfd_create("wlpinyin", 0);
 	if (state->shm_pool_fd < 0) {
@@ -260,11 +262,19 @@ int im_panel_init(struct wlpinyin_state *state) {
 	}
 
 	state->shm_pool =
-			wl_shm_create_pool(state->wl_shm, state->shm_pool_fd, DEFAULT_SHM_SIZE);
+		wl_shm_create_pool(state->wl_shm, state->shm_pool_fd, DEFAULT_SHM_SIZE);
 
-	state->popup_pango_ctx =
-			pango_font_map_create_context(pango_cairo_font_map_get_default());
+	PangoFontMap *font_map = pango_cairo_font_map_new();
+	if (font_map == NULL) {
+		wlpinyin_err("failed to create cairo font map");
+		return -1;
+	}
+	state->popup_pango_ctx = pango_font_map_create_context(font_map);
+	g_object_unref(font_map);
 	state->popup_pango_layout = pango_layout_new(state->popup_pango_ctx);
+	PangoFontDescription *desc = pango_font_description_from_string(POPUP_FONT);
+	pango_layout_set_font_description(state->popup_pango_layout, desc);
+	pango_font_description_free(desc);
 
 	state->frame_callback_done = true;
 	state->pending_render = true;
