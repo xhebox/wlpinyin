@@ -12,7 +12,6 @@
 
 #include "input-method-unstable-v2-client-protocol.h"
 #include "wlpinyin.h"
-#include "config.h"
 
 #define ITEM_SPACING 8
 #define ROW_SPACING 4
@@ -265,25 +264,17 @@ int im_panel_init(struct wlpinyin_state *state) {
 		return -1;
 	}
 
-	state->shm_pool =
-		wl_shm_create_pool(state->wl_shm, state->shm_pool_fd, DEFAULT_SHM_SIZE);
-
-	PangoFontMap *font_map = pango_cairo_font_map_new();
-	if (font_map == NULL) {
-		wlpinyin_err("failed to create cairo font map");
-		return -1;
-	}
-	state->popup_pango_ctx = pango_font_map_create_context(font_map);
-	g_object_unref(font_map);
-	state->popup_pango_layout = pango_layout_new(state->popup_pango_ctx);
-	PangoFontDescription *desc = pango_font_description_from_string(POPUP_FONT);
-	pango_layout_set_font_description(state->popup_pango_layout, desc);
-	pango_font_description_free(desc);
-
-	state->frame_callback_done = true;
-	state->pending_render = true;
-
-	return 0;
+        state->shm_pool =
+                wl_shm_create_pool(state->wl_shm, state->shm_pool_fd, DEFAULT_SHM_SIZE);
+        state->popup_pango_ctx =
+                pango_font_map_create_context(pango_cairo_font_map_get_default());
+        state->popup_pango_layout = pango_layout_new(state->popup_pango_ctx);
+        PangoFontDescription *desc = pango_font_description_from_string(popup_font);
+        pango_layout_set_font_description(state->popup_pango_layout, desc);
+        pango_font_description_free(desc);
+        state->frame_callback_done = true;
+        state->pending_render = true;
+        return 0;
 }
 
 void im_panel_destroy(struct wlpinyin_state *state) {
