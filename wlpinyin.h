@@ -14,9 +14,30 @@
 #include <pango/pango.h>
 #endif
 
-// user config
+typedef struct {
+	xkb_keysym_t keysym;
+	bool pressed;
+	unsigned int modmask;
+} key_sequence_event_t;
+
+extern const char *toggle_sequence_str[];
+extern const size_t toggle_sequence_str_len;
+
+extern const unsigned int ShiftMask;
+extern const unsigned int ControlMask;
+extern const unsigned int Mod1Mask;
+extern const unsigned int Mod4Mask;
+
 bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym, bool pressed);
 extern bool default_activation;
+
+#ifdef ENABLE_POPUP
+extern const float popup_bg_rgba[4];
+extern const float popup_hl_rgba[4];
+extern const float popup_txt_rgba[4];
+extern const char *popup_font;
+extern const int popup_spacing;
+#endif
 
 // internal
 struct engine;
@@ -75,9 +96,9 @@ typedef struct {
 } im_preedit_t;
 
 typedef struct {
-	int page_no;            // 当前页码（行号）
-	int highlighted_index;  // 当前高亮的候选词索引（0-based）
-	int page_size;          // 当前页的候选词数量
+	int page_no;
+	int highlighted_index;
+	int page_size;
 } im_context_t;
 
 void im_engine_cand_begin(struct engine *engine, int off);
