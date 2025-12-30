@@ -18,6 +18,15 @@
 bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym, bool pressed);
 extern bool default_activation;
 
+#ifdef ENABLE_POPUP
+extern const float popup_bg_rgba[4];
+extern const float popup_hl_rgba[4];
+extern const float popup_txt_rgba[4];
+extern const char *popup_font;
+extern const int popup_spacing;
+#endif
+
+
 // internal
 struct engine;
 

@@ -179,59 +179,63 @@ int im_panel_update(struct wlpinyin_state *state) {
 	cairo_set_source_rgba(cr, 0, 0, 0, 0);
 	cairo_paint(cr);
 
-	/* Draw background */
-	draw_rounded_rectangle(cr, 0, 0, panel_width, panel_height, CORNER_RADIUS);
-	cairo_set_source_rgba(cr, POPUP_BG_RGBA[0], POPUP_BG_RGBA[1], POPUP_BG_RGBA[2], POPUP_BG_RGBA[3]);
-	cairo_fill(cr);
+        /* Draw background */
+        draw_rounded_rectangle(cr, 0, 0, panel_width, panel_height, CORNER_RADIUS);
+        cairo_pattern_t *bg_pattern = cairo_pattern_create_rgba(popup_bg_rgba[0], popup_bg_rgba[1], popup_bg_rgba[2], popup_bg_rgba[3]);
+        cairo_set_source(cr, bg_pattern);
+        cairo_fill(cr);
+        cairo_pattern_destroy(bg_pattern);
 
-	/* Draw candidates in grid layout */
-	im_engine_cand_begin(state->engine, start_idx);
-	for (int i = start_idx; im_engine_cand_next(state->engine); i++) {
-		const char *text = im_engine_cand_get(state->engine);
-		int row = i / ctx.page_size;
-		int col = i % ctx.page_size;
-		if (row > real_end_row)
-			break;
+        /* Draw candidates in grid layout */
+        im_engine_cand_begin(state->engine, start_idx);
+        for (int i = start_idx; im_engine_cand_next(state->engine); i++) {
+                const char *text = im_engine_cand_get(state->engine);
+                int row = i / ctx.page_size;
+                int col = i % ctx.page_size;
+                if (row > real_end_row)
+                        break;
 
-		int x = 0;
-		for (int c = 0; c < col; c++)
-			x += row_width[c];
-		int y = (row - start_row) * row_height;
+                int x = 0;
+                for (int c = 0; c < col; c++)
+                        x += row_width[c];
+                int y = (row - start_row) * row_height;
 
-		bufptr = 0;
-		bufptr = snprintf(&buf[bufptr], sizeof(buf) - bufptr, "%d ", col + 1);
-		if (row != ctx.page_no)
-			for (int i = 0; i < bufptr; i++)
-				buf[i] = ' ';
-		bufptr += snprintf(&buf[bufptr], sizeof(buf) - bufptr, "%s", text);
-		pango_layout_set_text(state->popup_pango_layout, buf, bufptr);
-		PangoRectangle text_rect;
-		pango_layout_get_pixel_extents(state->popup_pango_layout, NULL, &text_rect);
+                bufptr = 0;
+                bufptr = snprintf(&buf[bufptr], sizeof(buf) - bufptr, "%d ", col + 1);
+                if (row != ctx.page_no)
+                        for (int i = 0; i < bufptr; i++)
+                                buf[i] = ' ';
+                bufptr += snprintf(&buf[bufptr], sizeof(buf) - bufptr, "%s", text);
+                pango_layout_set_text(state->popup_pango_layout, buf, bufptr);
+                PangoRectangle text_rect;
+                pango_layout_get_pixel_extents(state->popup_pango_layout, NULL, &text_rect);
 
-		/* Draw highlight background */
-		if (row == ctx.page_no && col == ctx.highlighted_index) {
-			draw_rounded_rectangle(cr, x, y, row_width[col], row_height, 0);
-			cairo_set_source_rgba(cr, POPUP_HL_RGBA[0], POPUP_HL_RGBA[1], POPUP_HL_RGBA[2], POPUP_HL_RGBA[3]);
+                /* Draw highlight background */
+                if (row == ctx.page_no && col == ctx.highlighted_index) {
+                        draw_rounded_rectangle(cr, x, y, row_width[col], row_height, 0);
+                        cairo_pattern_t *hl_pattern = cairo_pattern_create_rgba(popup_hl_rgba[0], popup_hl_rgba[1], popup_hl_rgba[2], popup_hl_rgba[3]);
+                        cairo_set_source(cr, hl_pattern);
+                        cairo_fill(cr);
+                        cairo_pattern_destroy(hl_pattern);
+                }
 
-			cairo_fill(cr);
-		}
+                cairo_pattern_t *txt_pattern = cairo_pattern_create_rgba(popup_txt_rgba[0], popup_txt_rgba[1], popup_txt_rgba[2], popup_txt_rgba[3]);
+                cairo_set_source(cr, txt_pattern);
+                cairo_move_to(cr, x + ITEM_SPACING, y + ROW_SPACING);
+                pango_cairo_show_layout(cr, state->popup_pango_layout);
+                cairo_pattern_destroy(txt_pattern);
+        }
+        im_engine_cand_end(state->engine);
 
-		cairo_set_source_rgba(cr, POPUP_TXT_RGBA[0], POPUP_TXT_RGBA[1], POPUP_TXT_RGBA[2], POPUP_TXT_RGBA[3]);
-		cairo_move_to(cr, x + ITEM_SPACING, y + ROW_SPACING);
-		pango_cairo_show_layout(cr, state->popup_pango_layout);
-	}
-	im_engine_cand_end(state->engine);
+        cairo_destroy(cr);
+        cairo_surface_destroy(cairo_surface);
 
-	cairo_destroy(cr);
-	cairo_surface_destroy(cairo_surface);
-
-	/* Commit to wayland */
-	wl_surface_attach(state->popup_surface, state->shm_buffer, 0, 0);
-	wl_surface_damage(state->popup_surface, 0, 0, panel_width, panel_height);
-	wl_surface_commit(state->popup_surface);
-	state->pending_render = false;
-
-	return 0;
+        /* Commit to wayland */
+        wl_surface_attach(state->popup_surface, state->shm_buffer, 0, 0);
+        wl_surface_damage(state->popup_surface, 0, 0, panel_width, panel_height);
+        wl_surface_commit(state->popup_surface);
+        state->pending_render = false;
+        return 0;
 }
 
 int im_panel_init(struct wlpinyin_state *state) {
