@@ -107,14 +107,22 @@ void rpc_handle_client_data(struct wlpinyin_state *state) {
 
 	wlpinyin_dbg("rpc client command: %s", buf);
 	if (strcmp(buf, "enable") == 0) {
-		state->im_enabled = true;
+		// Enable Chinese input: turn off ascii_mode
+		im_engine_set_ascii_mode(state->engine, false);
 		write(state->rpc_client, "ok\n", 3);
 	} else if (strcmp(buf, "disable") == 0) {
-		state->im_enabled = false;
+		// Disable Chinese input: turn on ascii_mode
+		im_engine_set_ascii_mode(state->engine, true);
 		write(state->rpc_client, "ok\n", 3);
 	} else if (strcmp(buf, "toggle") == 0) {
-		state->im_enabled = !state->im_enabled;
+		// Toggle ascii_mode
+		im_engine_toggle(state->engine);
 		write(state->rpc_client, "ok\n", 3);
+	} else if (strcmp(buf, "status") == 0) {
+		// Query current status
+		bool ascii_mode = im_engine_get_ascii_mode(state->engine);
+		const char *status = ascii_mode ? "disable\n" : "enable\n";
+		write(state->rpc_client, status, strlen(status));
 	} else {
 		write(state->rpc_client, "error: unknown command\n", 23);
 	}

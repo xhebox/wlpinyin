@@ -94,6 +94,8 @@ im_context_t im_engine_context(struct engine *);
 bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
 void im_engine_toggle(struct engine *);
 void im_engine_reset(struct engine *);
+bool im_engine_get_ascii_mode(struct engine *);
+void im_engine_set_ascii_mode(struct engine *, bool ascii_mode);
 
 int im_panel_init(struct wlpinyin_state *);
 int im_panel_update(struct wlpinyin_state *);

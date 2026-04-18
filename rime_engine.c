@@ -205,13 +205,21 @@ bool im_engine_key(rime_engine *engine,
 }
 
 void im_engine_toggle(rime_engine *engine) {
-	engine->api->set_option(engine->sess, "ascii_mode",
-													!engine->api->get_option(engine->sess, "ascii_mode"));
-	engine->api->commit_composition(engine->sess);
-	im_engine_update_context(engine);
+	bool current = im_engine_get_ascii_mode(engine);
+	im_engine_set_ascii_mode(engine, !current);
 }
 
 void im_engine_reset(rime_engine *engine) {
 	engine->api->clear_composition(engine->sess);
+	im_engine_update_context(engine);
+}
+
+bool im_engine_get_ascii_mode(rime_engine *engine) {
+	return engine->api->get_option(engine->sess, "ascii_mode");
+}
+
+void im_engine_set_ascii_mode(rime_engine *engine, bool ascii_mode) {
+	engine->api->set_option(engine->sess, "ascii_mode", ascii_mode);
+	engine->api->commit_composition(engine->sess);
 	im_engine_update_context(engine);
 }
