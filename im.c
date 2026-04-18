@@ -36,7 +36,7 @@ static void im_handle_key(struct wlpinyin_state *state,
 		return;
 
 	bool handled = false;
-	if (state->im_activated) {
+	if (state->im_activated && state->im_enabled) {
 		if (im_toggle(state->xkb_state, keynode->xkb_keysym, keynode->pressed)) {
 			im_engine_toggle(state->engine);
 			handled = true;
@@ -168,6 +168,7 @@ static void handle_deactivate(void *data,
 	im_engine_reset(state->engine);
 	im_panel_update(state);
 	state->im_activated = false;
+	state->im_enabled = false;
 }
 
 static void handle_activate(void *data,
@@ -178,6 +179,7 @@ static void handle_activate(void *data,
 	im_engine_reset(state->engine);
 	im_panel_update(state);
 	state->im_activated = true;
+	state->im_enabled = true;
 }
 
 static void handle_done(void *data,
@@ -219,6 +221,7 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 	}
 	state->signalfd = signalfd;
 	state->display = display;
+	state->im_enabled = true;
 
 	{
 		struct wl_registry *registry = wl_display_get_registry(state->display);
@@ -298,6 +301,11 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 		goto clean;
 	}
 
+	if (rpc_init(state) != 0) {
+		wlpinyin_err("failed to setup rpc socket");
+		goto clean;
+	}
+
 	wl_display_roundtrip(state->display);
 	return state;
 
@@ -310,6 +318,7 @@ int im_loop(struct wlpinyin_state *state) {
 	enum {
 		fd_signal = 0,
 		fd_wayland,
+		fd_rpc,
 		fd_max,
 	};
 
@@ -321,9 +330,12 @@ int im_loop(struct wlpinyin_state *state) {
 	fds[fd_wayland].fd = wl_display_get_fd(state->display);
 	fds[fd_wayland].events = POLLIN;
 
+	fds[fd_rpc].fd = state->rpc_fd;
+	fds[fd_rpc].events = POLLIN;
+
 	bool running = true;
 
-	while (running && poll(fds, sizeof fds / sizeof fds[fd_wayland], -1) != -1) {
+	while (running && poll(fds, fd_max, -1) != -1) {
 		if (fds[fd_signal].revents & POLLIN) {
 			struct signalfd_siginfo info = {0};
 			read(fds[fd_signal].fd, &info, sizeof(info));
@@ -338,6 +350,8 @@ int im_loop(struct wlpinyin_state *state) {
 			if (wl_display_roundtrip(state->display) == -1) {
 				return -1;
 			}
+		} else if (fds[fd_rpc].revents & POLLIN) {
+			rpc_handle(state);
 		}
 	}
 
@@ -369,6 +383,7 @@ int im_destroy(struct wlpinyin_state *state) {
 	if (state->xkb_context)
 		xkb_context_unref(state->xkb_context);
 
+	rpc_destroy(state);
 	wl_display_flush(state->display);
 	return 0;
 }

@@ -111,6 +111,14 @@ rime_engine *im_engine_new() {
 	snprintf(engine->user_dir, size + 1, "%s/wlpinyin", config_dir);
 	engine->traits.user_data_dir = engine->user_dir;
 
+	const gchar *state_dir = g_get_user_state_dir();
+	if (state_dir != NULL) {
+		int log_size = snprintf(NULL, 0, "%s/wlpinyin", state_dir);
+		char *log_dir = malloc(log_size + 1);
+		snprintf(log_dir, log_size + 1, "%s/wlpinyin", state_dir);
+		engine->traits.log_dir = log_dir;
+	}
+
 	engine->traits.distribution_name = "wlpinyin";
 	engine->traits.distribution_code_name = "wlpinyin";
 	engine->traits.distribution_version = "0.1";
@@ -154,6 +162,8 @@ void im_engine_free(rime_engine *engine) {
 		free(engine->commit_text);
 	if (engine->user_dir != NULL)
 		free(engine->user_dir);
+	if (engine->traits.log_dir != NULL)
+		free((char *)engine->traits.log_dir);
 	engine->api->destroy_session(engine->sess);
 	engine->api->finalize();
 	free(engine);

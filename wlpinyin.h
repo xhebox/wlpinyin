@@ -16,7 +16,6 @@
 
 // user config
 bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym, bool pressed);
-extern bool default_activation;
 
 // internal
 struct engine;
@@ -52,6 +51,7 @@ struct wlpinyin_state {
 	uint32_t im_serial;
 
 	bool im_activated;
+	bool im_enabled;
 
 	struct engine *engine;
 
@@ -59,6 +59,9 @@ struct wlpinyin_state {
 	char *xkb_keymap_string;
 	struct xkb_keymap *xkb_keymap;
 	struct xkb_state *xkb_state;
+
+	int rpc_fd;
+	char *rpc_socket_path;
 };
 
 struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display);
@@ -94,6 +97,10 @@ void im_engine_reset(struct engine *);
 int im_panel_init(struct wlpinyin_state *);
 int im_panel_update(struct wlpinyin_state *);
 void im_panel_destroy(struct wlpinyin_state *);
+
+int rpc_init(struct wlpinyin_state *);
+void rpc_handle(struct wlpinyin_state *);
+void rpc_destroy(struct wlpinyin_state *);
 
 #define wlpinyin_err(fmt, ...)                                     \
 	fprintf(stderr, "[%*s:%*d] " fmt "\n", 8, __FILE__, 3, __LINE__, \

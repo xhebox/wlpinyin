@@ -38,4 +38,4 @@ if enable_popup.enabled()
   popup_deps = [dependency('cairo'), dependency('pangocairo')]
 endif
 
-executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c', 'popup_renderer.c', 'text_renderer.c'], dependencies: [wl_client, pinyin, xkbcommon, glib, protocols_dep, rt] + popup_deps, install: true)
+executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c', 'popup_renderer.c', 'text_renderer.c', 'rpc.c'], dependencies: [wl_client, pinyin, xkbcommon, glib, protocols_dep, rt] + popup_deps, install: true)
