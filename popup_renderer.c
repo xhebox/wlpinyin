@@ -65,6 +65,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 	if (ctx.page_size == 0) {
 		wl_surface_attach(state->popup_surface, NULL, 0, 0);
 		wl_surface_commit(state->popup_surface);
+		state->frame_callback_done = true;
 		state->pending_render = false;
 		return 0;
 	}
@@ -147,6 +148,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 
 		if (ftruncate(state->shm_pool_fd, buffer_newsz) < 0) {
 			wlpinyin_err("fail to resize shm: %s", strerror(errno));
+			state->frame_callback_done = true;
 			return -1;
 		}
 		wl_shm_pool_resize(state->shm_pool, buffer_newsz);
@@ -156,6 +158,7 @@ int im_panel_update(struct wlpinyin_state *state) {
 		if (state->popup_data == MAP_FAILED) {
 			wlpinyin_err("mmap failed: %s", strerror(errno));
 			state->popup_data = NULL;
+			state->frame_callback_done = true;
 			return -1;
 		}
 		state->shm_size = buffer_newsz;
