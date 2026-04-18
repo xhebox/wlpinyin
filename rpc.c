@@ -1,4 +1,5 @@
 #include <glib.h>
+#include <poll.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -49,7 +50,8 @@ int rpc_init(struct wlpinyin_state *state) {
 		return -1;
 	}
 
-	if (listen(fd, 4) == -1) {
+	// Allow multiple pending connections in backlog
+	if (listen(fd, 5) == -1) {
 		wlpinyin_err("failed to listen on socket");
 		close(fd);
 		g_free(path);
@@ -58,45 +60,69 @@ int rpc_init(struct wlpinyin_state *state) {
 
 	state->rpc_fd = fd;
 	state->rpc_socket_path = path;
+	state->rpc_client = -1;
+
 	wlpinyin_dbg("rpc socket listening at %s", path);
 	return 0;
 }
 
-void rpc_handle(struct wlpinyin_state *state) {
-	int client = accept4(state->rpc_fd, NULL, NULL, SOCK_NONBLOCK);
-	if (client == -1) {
+static void rpc_close_client(struct wlpinyin_state *state) {
+	if (state->rpc_client != -1) {
+		close(state->rpc_client);
+		state->rpc_client = -1;
+		wlpinyin_dbg("rpc client disconnected");
+	}
+}
+
+void rpc_accept(struct wlpinyin_state *state) {
+	// Only accept if no existing client
+	if (state->rpc_client != -1) {
 		return;
 	}
 
+	int client = accept4(state->rpc_fd, NULL, NULL, SOCK_NONBLOCK);
+	if (client != -1) {
+		state->rpc_client = client;
+		wlpinyin_dbg("rpc client connected");
+	}
+}
+
+void rpc_handle_client_data(struct wlpinyin_state *state) {
+	if (state->rpc_client == -1)
+		return;
+
 	char buf[256] = {0};
-	ssize_t n = read(client, buf, sizeof(buf) - 1);
+	ssize_t n = read(state->rpc_client, buf, sizeof(buf) - 1);
+
 	if (n <= 0) {
-		close(client);
+		// Connection closed or error
+		rpc_close_client(state);
 		return;
 	}
 
 	// Strip trailing \r\n or \n
-	while (n > 0 && (buf[n-1] == '\n' || buf[n-1] == '\r')) {
+	while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) {
 		buf[--n] = '\0';
 	}
 
+	wlpinyin_dbg("rpc client command: %s", buf);
 	if (strcmp(buf, "enable") == 0) {
 		state->im_enabled = true;
-		write(client, "ok\n", 3);
+		write(state->rpc_client, "ok\n", 3);
 	} else if (strcmp(buf, "disable") == 0) {
 		state->im_enabled = false;
-		write(client, "ok\n", 3);
+		write(state->rpc_client, "ok\n", 3);
 	} else if (strcmp(buf, "toggle") == 0) {
 		state->im_enabled = !state->im_enabled;
-		write(client, "ok\n", 3);
+		write(state->rpc_client, "ok\n", 3);
 	} else {
-		write(client, "error: unknown command\n", 23);
+		write(state->rpc_client, "error: unknown command\n", 23);
 	}
-
-	close(client);
 }
 
 void rpc_destroy(struct wlpinyin_state *state) {
+	rpc_close_client(state);
+
 	if (state->rpc_fd != -1) {
 		close(state->rpc_fd);
 	}

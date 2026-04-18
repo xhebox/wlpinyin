@@ -318,24 +318,37 @@ int im_loop(struct wlpinyin_state *state) {
 	enum {
 		fd_signal = 0,
 		fd_wayland,
-		fd_rpc,
+		fd_rpc_listen,
+		fd_rpc_client,
 		fd_max,
 	};
 
+	bool running = true;
 	struct pollfd fds[fd_max] = {0};
 
+	// Initialize fixed fds
 	fds[fd_signal].fd = state->signalfd;
 	fds[fd_signal].events = POLLIN;
 
 	fds[fd_wayland].fd = wl_display_get_fd(state->display);
 	fds[fd_wayland].events = POLLIN;
 
-	fds[fd_rpc].fd = state->rpc_fd;
-	fds[fd_rpc].events = POLLIN;
+	fds[fd_rpc_listen].fd = state->rpc_fd;
+	fds[fd_rpc_listen].events = POLLIN;
 
-	bool running = true;
+	fds[fd_rpc_client].fd = -1;  // Will be set when client connects
+	fds[fd_rpc_client].events = POLLIN;
 
-	while (running && poll(fds, fd_max, -1) != -1) {
+	while (running) {
+		// Update RPC client fd
+		fds[fd_rpc_client].fd = state->rpc_client;
+
+		int ret = poll(fds, fd_max, -1);
+		if (ret == -1) {
+			continue;
+		}
+
+		// Handle signal
 		if (fds[fd_signal].revents & POLLIN) {
 			struct signalfd_siginfo info = {0};
 			read(fds[fd_signal].fd, &info, sizeof(info));
@@ -346,12 +359,23 @@ int im_loop(struct wlpinyin_state *state) {
 				break;
 			}
 			wlpinyin_dbg("signal: %d, running: %d", info.ssi_signo, running);
-		} else if (fds[fd_wayland].revents & POLLIN) {
+		}
+
+		// Handle wayland
+		if (fds[fd_wayland].revents & POLLIN) {
 			if (wl_display_roundtrip(state->display) == -1) {
 				return -1;
 			}
-		} else if (fds[fd_rpc].revents & POLLIN) {
-			rpc_handle(state);
+		}
+
+		// Handle RPC client data first (process pending data before accepting new connection)
+		if (fds[fd_rpc_client].fd != -1 && fds[fd_rpc_client].revents & (POLLIN | POLLHUP | POLLERR)) {
+			rpc_handle_client_data(state);
+		}
+
+		// Handle new RPC connections
+		if (fds[fd_rpc_listen].revents & POLLIN) {
+			rpc_accept(state);
 		}
 	}
 

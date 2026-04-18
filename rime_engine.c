@@ -111,12 +111,18 @@ rime_engine *im_engine_new() {
 	snprintf(engine->user_dir, size + 1, "%s/wlpinyin", config_dir);
 	engine->traits.user_data_dir = engine->user_dir;
 
+	// Create user_data_dir if it doesn't exist
+	g_mkdir_with_parents(engine->user_dir, 0700);
+
 	const gchar *state_dir = g_get_user_state_dir();
 	if (state_dir != NULL) {
 		int log_size = snprintf(NULL, 0, "%s/wlpinyin", state_dir);
 		char *log_dir = malloc(log_size + 1);
 		snprintf(log_dir, log_size + 1, "%s/wlpinyin", state_dir);
 		engine->traits.log_dir = log_dir;
+
+		// Create log_dir if it doesn't exist
+		g_mkdir_with_parents(log_dir, 0700);
 	}
 
 	engine->traits.distribution_name = "wlpinyin";

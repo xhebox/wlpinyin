@@ -62,6 +62,7 @@ struct wlpinyin_state {
 
 	int rpc_fd;
 	char *rpc_socket_path;
+	int rpc_client;  // single client connection fd
 };
 
 struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display);
@@ -99,7 +100,8 @@ int im_panel_update(struct wlpinyin_state *);
 void im_panel_destroy(struct wlpinyin_state *);
 
 int rpc_init(struct wlpinyin_state *);
-void rpc_handle(struct wlpinyin_state *);
+void rpc_accept(struct wlpinyin_state *);
+void rpc_handle_client_data(struct wlpinyin_state *);
 void rpc_destroy(struct wlpinyin_state *);
 
 #define wlpinyin_err(fmt, ...)                                     \
