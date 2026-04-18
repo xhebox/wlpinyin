@@ -16,6 +16,7 @@ wl_client = dependency('wayland-client')
 wl_protocols = dependency('wayland-protocols')
 pinyin = dependency('rime')
 xkbcommon = dependency('xkbcommon')
+glib = dependency('glib-2.0')
 
 cc = meson.get_compiler('c')
 rt = cc.find_library('rt', required: false)
@@ -37,4 +38,4 @@ if enable_popup.enabled()
   popup_deps = [dependency('cairo'), dependency('pangocairo')]
 endif
 
-executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c', 'popup_renderer.c', 'text_renderer.c'], dependencies: [wl_client, pinyin, xkbcommon, protocols_dep, rt] + popup_deps, install: true)
+executable('wlpinyin', ['main.c', 'im.c', 'rime_engine.c', 'config.c', 'popup_renderer.c', 'text_renderer.c'], dependencies: [wl_client, pinyin, xkbcommon, glib, protocols_dep, rt] + popup_deps, install: true)

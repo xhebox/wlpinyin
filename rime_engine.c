@@ -1,6 +1,7 @@
 #include <rime_api.h>
 #include <stdlib.h>
 #include <string.h>
+#include <glib.h>
 
 #include "wlpinyin.h"
 
@@ -99,15 +100,15 @@ rime_engine *im_engine_new() {
 	RIME_STRUCT_INIT(RimeTraits, engine->traits);
 	engine->traits.shared_data_dir = "/share/rime-data";
 
-	char *home = getenv("HOME");
-	if (home == NULL) {
+	const gchar *config_dir = g_get_user_config_dir();
+	if (config_dir == NULL) {
 		im_engine_free(engine);
 		return false;
 	}
 
-	int size = snprintf(NULL, 0, "%s/.config/wlpinyin", home);
+	int size = snprintf(NULL, 0, "%s/wlpinyin", config_dir);
 	engine->user_dir = malloc(size + 1);
-	snprintf(engine->user_dir, size + 1, "%s/.config/wlpinyin", home);
+	snprintf(engine->user_dir, size + 1, "%s/wlpinyin", config_dir);
 	engine->traits.user_data_dir = engine->user_dir;
 
 	engine->traits.distribution_name = "wlpinyin";
