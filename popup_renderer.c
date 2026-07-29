@@ -267,17 +267,20 @@ int im_panel_init(struct wlpinyin_state *state) {
 		return -1;
 	}
 
-        state->shm_pool =
-                wl_shm_create_pool(state->wl_shm, state->shm_pool_fd, DEFAULT_SHM_SIZE);
-        state->popup_pango_ctx =
-                pango_font_map_create_context(pango_cairo_font_map_get_default());
-        state->popup_pango_layout = pango_layout_new(state->popup_pango_ctx);
-        PangoFontDescription *desc = pango_font_description_from_string(popup_font);
-        pango_layout_set_font_description(state->popup_pango_layout, desc);
-        pango_font_description_free(desc);
-        state->frame_callback_done = true;
-        state->pending_render = true;
-        return 0;
+	state->shm_pool =
+			wl_shm_create_pool(state->wl_shm, state->shm_pool_fd, DEFAULT_SHM_SIZE);
+
+	state->popup_pango_ctx =
+			pango_font_map_create_context(pango_cairo_font_map_get_default());
+	state->popup_pango_layout = pango_layout_new(state->popup_pango_ctx);
+	PangoFontDescription *desc = pango_font_description_from_string(popup_font);
+	pango_layout_set_font_description(state->popup_pango_layout, desc);
+	pango_font_description_free(desc);
+
+	state->frame_callback_done = true;
+	state->pending_render = true;
+
+	return 0;
 }
 
 void im_panel_destroy(struct wlpinyin_state *state) {
