@@ -30,6 +30,18 @@ static void im_send_text(struct wlpinyin_state *state, const char *text) {
 
 static void noop() {}
 
+static xkb_mod_mask_t rime_modifiers(struct xkb_state *xkb_state) {
+	xkb_mod_mask_t mods = xkb_state_serialize_mods(
+			xkb_state, XKB_STATE_MODS_EFFECTIVE | XKB_STATE_LAYOUT_EFFECTIVE);
+	struct xkb_keymap *keymap = xkb_state_get_keymap(xkb_state);
+	xkb_mod_index_t num_lock = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_NUM);
+
+	if (num_lock != XKB_MOD_INVALID)
+		mods &= ~((xkb_mod_mask_t)1 << num_lock);
+
+	return mods;
+}
+
 static void im_handle_key(struct wlpinyin_state *state,
 													struct wlpinyin_key *keynode) {
 	if (state->xkb_state == NULL)
@@ -43,11 +55,8 @@ static void im_handle_key(struct wlpinyin_state *state,
 		}
 
 		if (!handled && keynode->pressed) {
-			handled =
-					im_engine_key(state->engine, keynode->xkb_keysym,
-												xkb_state_serialize_mods(
-														state->xkb_state, XKB_STATE_MODS_EFFECTIVE |
-																									XKB_STATE_LAYOUT_EFFECTIVE));
+			xkb_mod_mask_t mods = rime_modifiers(state->xkb_state);
+			handled = im_engine_key(state->engine, keynode->xkb_keysym, mods);
 		}
 
 		if (handled) {
