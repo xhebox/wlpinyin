@@ -1,6 +1,7 @@
 #include <rime_api.h>
 #include <stdlib.h>
 #include <string.h>
+#include <glib.h>
 
 #include "wlpinyin.h"
 
@@ -99,16 +100,30 @@ rime_engine *im_engine_new() {
 	RIME_STRUCT_INIT(RimeTraits, engine->traits);
 	engine->traits.shared_data_dir = "/share/rime-data";
 
-	char *home = getenv("HOME");
-	if (home == NULL) {
+	const gchar *config_dir = g_get_user_config_dir();
+	if (config_dir == NULL) {
 		im_engine_free(engine);
 		return false;
 	}
 
-	int size = snprintf(NULL, 0, "%s/.config/wlpinyin", home);
+	int size = snprintf(NULL, 0, "%s/wlpinyin", config_dir);
 	engine->user_dir = malloc(size + 1);
-	snprintf(engine->user_dir, size + 1, "%s/.config/wlpinyin", home);
+	snprintf(engine->user_dir, size + 1, "%s/wlpinyin", config_dir);
 	engine->traits.user_data_dir = engine->user_dir;
+
+	// Create user_data_dir if it doesn't exist
+	g_mkdir_with_parents(engine->user_dir, 0700);
+
+	const gchar *state_dir = g_get_user_state_dir();
+	if (state_dir != NULL) {
+		int log_size = snprintf(NULL, 0, "%s/wlpinyin", state_dir);
+		char *log_dir = malloc(log_size + 1);
+		snprintf(log_dir, log_size + 1, "%s/wlpinyin", state_dir);
+		engine->traits.log_dir = log_dir;
+
+		// Create log_dir if it doesn't exist
+		g_mkdir_with_parents(log_dir, 0700);
+	}
 
 	engine->traits.distribution_name = "wlpinyin";
 	engine->traits.distribution_code_name = "wlpinyin";
@@ -153,6 +168,8 @@ void im_engine_free(rime_engine *engine) {
 		free(engine->commit_text);
 	if (engine->user_dir != NULL)
 		free(engine->user_dir);
+	if (engine->traits.log_dir != NULL)
+		free((char *)engine->traits.log_dir);
 	engine->api->destroy_session(engine->sess);
 	engine->api->finalize();
 	free(engine);
@@ -188,13 +205,21 @@ bool im_engine_key(rime_engine *engine,
 }
 
 void im_engine_toggle(rime_engine *engine) {
-	engine->api->set_option(engine->sess, "ascii_mode",
-													!engine->api->get_option(engine->sess, "ascii_mode"));
-	engine->api->commit_composition(engine->sess);
-	im_engine_update_context(engine);
+	bool current = im_engine_get_ascii_mode(engine);
+	im_engine_set_ascii_mode(engine, !current);
 }
 
 void im_engine_reset(rime_engine *engine) {
 	engine->api->clear_composition(engine->sess);
+	im_engine_update_context(engine);
+}
+
+bool im_engine_get_ascii_mode(rime_engine *engine) {
+	return engine->api->get_option(engine->sess, "ascii_mode");
+}
+
+void im_engine_set_ascii_mode(rime_engine *engine, bool ascii_mode) {
+	engine->api->set_option(engine->sess, "ascii_mode", ascii_mode);
+	engine->api->commit_composition(engine->sess);
 	im_engine_update_context(engine);
 }

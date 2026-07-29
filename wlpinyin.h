@@ -29,7 +29,6 @@ extern const unsigned int Mod1Mask;
 extern const unsigned int Mod4Mask;
 
 bool im_toggle(struct xkb_state *xkb, xkb_keysym_t keysym, bool pressed);
-extern bool default_activation;
 
 #ifdef ENABLE_POPUP
 extern const float popup_bg_rgba[4];
@@ -73,6 +72,7 @@ struct wlpinyin_state {
 	uint32_t im_serial;
 
 	bool im_activated;
+	bool im_enabled;
 
 	struct engine *engine;
 
@@ -80,6 +80,10 @@ struct wlpinyin_state {
 	char *xkb_keymap_string;
 	struct xkb_keymap *xkb_keymap;
 	struct xkb_state *xkb_state;
+
+	int rpc_fd;
+	char *rpc_socket_path;
+	int rpc_client;  // single client connection fd
 };
 
 struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display);
@@ -111,10 +115,17 @@ im_context_t im_engine_context(struct engine *);
 bool im_engine_key(struct engine *, xkb_keysym_t, xkb_mod_mask_t);
 void im_engine_toggle(struct engine *);
 void im_engine_reset(struct engine *);
+bool im_engine_get_ascii_mode(struct engine *);
+void im_engine_set_ascii_mode(struct engine *, bool ascii_mode);
 
 int im_panel_init(struct wlpinyin_state *);
 int im_panel_update(struct wlpinyin_state *);
 void im_panel_destroy(struct wlpinyin_state *);
+
+int rpc_init(struct wlpinyin_state *);
+void rpc_accept(struct wlpinyin_state *);
+void rpc_handle_client_data(struct wlpinyin_state *);
+void rpc_destroy(struct wlpinyin_state *);
 
 #define wlpinyin_err(fmt, ...)                                     \
 	fprintf(stderr, "[%*s:%*d] " fmt "\n", 8, __FILE__, 3, __LINE__, \
