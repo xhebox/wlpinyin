@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include <sys/mman.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
+#include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -231,6 +233,16 @@ struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display) {
 	state->signalfd = signalfd;
 	state->display = display;
 	state->im_enabled = true;
+#ifdef ENABLE_POPUP
+	/* Must run before any other goto clean: leaves either a valid fd or -1,
+	 * so im_destroy never closes the calloc-zeroed field (stdin). */
+	state->retry_timerfd =
+			timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+	if (state->retry_timerfd < 0) {
+		wlpinyin_err("failed to create retry timer: %s", strerror(errno));
+		goto clean;
+	}
+#endif
 
 	{
 		struct wl_registry *registry = wl_display_get_registry(state->display);
@@ -323,12 +335,23 @@ clean:
 	return NULL;
 }
 
+#ifdef ENABLE_POPUP
+/* Arms a one-shot retry timer; delay_ms == 0 disarms it. */
+void im_panel_retry_later(struct wlpinyin_state *state, int delay_ms) {
+	struct itimerspec its = {0};
+	its.it_value.tv_sec = delay_ms / 1000;
+	its.it_value.tv_nsec = (long)(delay_ms % 1000) * 1000000L;
+	timerfd_settime(state->retry_timerfd, 0, &its, NULL);
+}
+#endif
+
 int im_loop(struct wlpinyin_state *state) {
 	enum {
 		fd_signal = 0,
 		fd_wayland,
 		fd_rpc_listen,
 		fd_rpc_client,
+		fd_retry_timer,
 		fd_max,
 	};
 
@@ -345,8 +368,12 @@ int im_loop(struct wlpinyin_state *state) {
 	fds[fd_rpc_listen].fd = state->rpc_fd;
 	fds[fd_rpc_listen].events = POLLIN;
 
-	fds[fd_rpc_client].fd = -1;  // Will be set when client connects
+	fds[fd_rpc_client].fd = -1;	 // Will be set when client connects
 	fds[fd_rpc_client].events = POLLIN;
+#ifdef ENABLE_POPUP
+	fds[fd_retry_timer].fd = state->retry_timerfd;
+	fds[fd_retry_timer].events = POLLIN;
+#endif
 
 	while (running) {
 		// Update RPC client fd
@@ -377,8 +404,20 @@ int im_loop(struct wlpinyin_state *state) {
 			}
 		}
 
-		// Handle RPC client data first (process pending data before accepting new connection)
-		if (fds[fd_rpc_client].fd != -1 && fds[fd_rpc_client].revents & (POLLIN | POLLHUP | POLLERR)) {
+#ifdef ENABLE_POPUP
+		// Retry timer fired: always triggers one render (disarmed on success)
+		if (fds[fd_retry_timer].revents & POLLIN) {
+			uint64_t expirations;
+			read(state->retry_timerfd, &expirations, sizeof(expirations));
+			if (state->pending_render)
+				im_panel_update(state);
+		}
+#endif
+
+		// Handle RPC client data first (process pending data before accepting new
+		// connection)
+		if (fds[fd_rpc_client].fd != -1 &&
+				fds[fd_rpc_client].revents & (POLLIN | POLLHUP | POLLERR)) {
 			rpc_handle_client_data(state);
 		}
 
@@ -392,6 +431,11 @@ int im_loop(struct wlpinyin_state *state) {
 }
 
 int im_destroy(struct wlpinyin_state *state) {
+#ifdef ENABLE_POPUP
+	if (state->retry_timerfd >= 0)
+		close(state->retry_timerfd);
+#endif
+
 	if (state->input_method_keyboard_grab != NULL)
 		zwp_input_method_keyboard_grab_v2_release(
 				state->input_method_keyboard_grab);

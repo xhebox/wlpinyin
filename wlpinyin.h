@@ -12,6 +12,16 @@
 
 #ifdef ENABLE_POPUP
 #include <pango/pango.h>
+#define WLPINYIN_POPUP_BUFFER_COUNT 2
+
+struct wlpinyin_popup_buffer {
+	struct wl_buffer *buffer;
+	size_t offset;
+	int width;
+	int height;
+	int stride;
+	bool busy;
+};
 #endif
 
 // user config
@@ -35,13 +45,14 @@ struct wlpinyin_state {
 	struct zwp_input_popup_surface_v2 *popup_surface_v2;
 	int shm_pool_fd;
 	struct wl_shm_pool *shm_pool;
-	int shm_size;
-	struct wl_buffer *shm_buffer;
 	void *popup_data;
+	int shm_size;
+	int slot_capacity;
+	struct wlpinyin_popup_buffer popup_buffers[WLPINYIN_POPUP_BUFFER_COUNT];
 	PangoContext *popup_pango_ctx;
 	PangoLayout *popup_pango_layout;
-	bool frame_callback_done;
 	bool pending_render;
+	int retry_timerfd;
 #endif
 
 	struct zwp_input_method_v2 *input_method;
@@ -62,7 +73,7 @@ struct wlpinyin_state {
 
 	int rpc_fd;
 	char *rpc_socket_path;
-	int rpc_client;  // single client connection fd
+	int rpc_client;	 // single client connection fd
 };
 
 struct wlpinyin_state *im_setup(int signalfd, struct wl_display *display);
@@ -79,9 +90,9 @@ typedef struct {
 } im_preedit_t;
 
 typedef struct {
-	int page_no;            // 当前页码（行号）
-	int highlighted_index;  // 当前高亮的候选词索引（0-based）
-	int page_size;          // 当前页的候选词数量
+	int page_no;						// 当前页码（行号）
+	int highlighted_index;	// 当前高亮的候选词索引（0-based）
+	int page_size;					// 当前页的候选词数量
 } im_context_t;
 
 void im_engine_cand_begin(struct engine *engine, int off);
@@ -100,6 +111,9 @@ void im_engine_set_ascii_mode(struct engine *, bool ascii_mode);
 int im_panel_init(struct wlpinyin_state *);
 int im_panel_update(struct wlpinyin_state *);
 void im_panel_destroy(struct wlpinyin_state *);
+#ifdef ENABLE_POPUP
+void im_panel_retry_later(struct wlpinyin_state *, int delay_ms);
+#endif
 
 int rpc_init(struct wlpinyin_state *);
 void rpc_accept(struct wlpinyin_state *);
