@@ -128,6 +128,8 @@ static void handle_key(
 		uint32_t key,
 		uint32_t kstate) {
 	UNUSED(zwp_input_method_keyboard_grab_v2);
+	UNUSED(serial);	 // only used in debug logging
+	UNUSED(time);		 // only used in debug logging
 	struct wlpinyin_state *state = data;
 
 	struct wlpinyin_key keynode = {0};
@@ -160,6 +162,7 @@ static void handle_modifiers(
 		uint32_t mods_locked,
 		uint32_t group) {
 	UNUSED(zwp_input_method_keyboard_grab_v2);
+	UNUSED(serial);	 // only used in debug logging
 	struct wlpinyin_state *state = data;
 	wlpinyin_dbg(
 			"ev_modifiers: serial %d, depressed %d, latched %d, locked %d, group "
