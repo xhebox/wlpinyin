@@ -1,7 +1,7 @@
+#include <glib.h>
 #include <rime_api.h>
 #include <stdlib.h>
 #include <string.h>
-#include <glib.h>
 
 #include "wlpinyin.h"
 
@@ -22,6 +22,10 @@ static void handle_notify(void *context_object,
 													RimeSessionId session_id,
 													const char *message_type,
 													const char *message_value) {
+	UNUSED(context_object);	 // only used in debug logging
+	UNUSED(session_id);			 // only used in debug logging
+	UNUSED(message_type);		 // only used in debug logging
+	UNUSED(message_value);	 // only used in debug logging
 	wlpinyin_dbg("context_obj: %p, sess: %ld, msgtype: %s, msg: %s",
 							 context_object, session_id, message_type, message_value);
 }
